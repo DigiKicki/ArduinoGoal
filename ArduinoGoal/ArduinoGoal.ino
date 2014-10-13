@@ -3,11 +3,12 @@ int LEDAktiv=6; //Led wenn Lichtschranke durchbrochen
 int LEDIr=7; //IR Led
 int PD=0; //Analoger Eingang der Photodiode
 int val=0; //Messdaten
-int do_debug=1;
+//int do_debug=1;
 
 void setup()
 {
-  if (do_debug ==1) Serial.begin(9600);
+  //if (do_debug ==1) 
+  Serial.begin(9600);
   //benötigte Ports aktivieren
   pinMode(LEDAktiv, OUTPUT);
   pinMode(LEDInaktiv, OUTPUT); 
@@ -33,6 +34,6 @@ void loop()
   if (do_debug ==1) 
   {  
     Serial.println(val); //Werte zum Serial Monitor senden
-    delay(500);  
+    delay(50);  
   } 
 } 
