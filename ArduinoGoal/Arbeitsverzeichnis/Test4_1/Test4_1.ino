@@ -9,7 +9,7 @@
 
 Adafruit_NeoPixel strip = Adafruit_NeoPixel(ANZ_LEDs, PIN, NEO_GRB + NEO_KHZ800);
 
-  int stripArray[ANZ_LEDs];
+  int stripArray[ANZ_LEDs][3];
   int LEDon1[4]={0, -1, -2, -3};
   int LEDon2[4]={ANZ_LEDs-1, ANZ_LEDs, ANZ_LEDs+1, ANZ_LEDs+2};
   boolean UpDown1[4]={true, true, true, true};
@@ -48,15 +48,16 @@ void TOR()
   Serial.println("TOR");
   while(strip.getBrightness()>0)
   {
+    //WEIS auf allen LEDs neu setzen
     for(int i=0; i<ANZ_LEDs; i++)  { strip.setPixelColor(i, 255, 255, 255); }
-    
+    //Helligkeit Schrittweise Reduzieren
     if(strip.getBrightness()-10<0)  { strip.setBrightness(0); }
     else  { strip.setBrightness(strip.getBrightness()-10); }
     
     strip.show();
     delay(30);
   }
-  strip.setBrightness(255);
+  strip.setBrightness(255);  //Helligkeit wieder hochsetzen
   
   //Torshow-Effekt
   for(int j=0; j<100; j++)
@@ -67,9 +68,9 @@ void TOR()
       //1. Welle
       if(LEDon1[i]>=0)        //Sicherstellen dass im negativen Array-Bereich gearbeitet wird
       {
-        if( Brightness[i] > stripArray[LEDon1[i]] )        //Kontrolle ob neue Helligkeit größer ist als bisherige
+        if( Brightness[i] > stripArray[LEDon1[i]][2] )        //Kontrolle ob neue Helligkeit größer ist als bisherige
         {
-          stripArray[LEDon1[i]] = Brightness[i];           //Helligkeitswert wird auf Strip-Array geschrieben
+          stripArray[LEDon1[i]][2] = Brightness[i];           //Helligkeitswert wird auf Strip-Array geschrieben
         }
       }
       //LED-Nummer in./dekrementieren
@@ -83,11 +84,11 @@ void TOR()
       //2. Welle
       if(LEDon2[i]<ANZ_LEDs)        //Sicherstellen dass im negativen Array-Bereich gearbeitet wird
       {
-        if( Brightness[i] > stripArray[LEDon2[i]] )        //Kontrolle ob neue Helligkeit größer ist als bisherige
+        if( Brightness[i] > stripArray[LEDon2[i]][2] )        //Kontrolle ob neue Helligkeit größer ist als bisherige
         {
-          stripArray[LEDon2[i]] = Brightness[i];           //Helligkeitswert wird auf Strip-Array geschrieben
+          stripArray[LEDon2[i]][2] = Brightness[i];           //Helligkeitswert wird auf Strip-Array geschrieben
         }
-      
+      }
       //LED-Nummer in./dekrementieren
       if (UpDown2[i] == true) { LEDon2[i]++; }
       else if (UpDown2[i] == false) {LEDon2[i]--; }
@@ -99,18 +100,15 @@ void TOR()
   }  //Ende For-Schleife/Ende Torshow-Effekt
     
   LEDsbeschreiben();
-  LEDarrayLeeren();
+  LEDArrayLeeren();
   
   delay(DELAY);
   }
 }
 
-void LEDarrayLeeren(void)
+void LEDArrayLeeren(void)
 {
-  for(int i=0; i<ANZ_LEDs; i++)
-  {
-    stripArray[i] = 0;
-  }
+  for(int i=0; i<ANZ_LEDs; i++)  { stripArray[i] = 0; }
   return;
 }
 
@@ -118,9 +116,9 @@ void LEDsbeschreiben(void)
 {
   for(int i=0; i<ANZ_LEDs; i++)
   {
-    strip.setPixelColor(i, 0, 0, stripArray[i]);
+    strip.setPixelColor(i, stripArray[i][0], stripArray[i][1], stripArray[i][2]);
   }
-  strip.show();5
+  strip.show();
   return;
 }
   
