@@ -33,7 +33,7 @@ class NeoPixel_AddOn
 		return;
 	};
 
-  
+
 };
 
 #endif NEOPIXEL_ADDON_H

@@ -1,5 +1,7 @@
-#include <Adafruit_NeoPixel.h>
 #include <NeoPixel_AddOn.h>
+
+#include <Adafruit_NeoPixel.h>
+//#include <NeoPixel_AddOn.h>
 
 
   #define PIN 6  
