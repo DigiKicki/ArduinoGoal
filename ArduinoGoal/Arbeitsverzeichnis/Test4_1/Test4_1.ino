@@ -1,7 +1,7 @@
 #include <Adafruit_NeoPixel.h>
 
   #define PIN 6  
-  #define ANZ_LEDs 20
+  #define ANZ_LEDs 10
   #define DELAY 100
   
 //void LEDsbeschreiben(void);
@@ -14,6 +14,7 @@ Adafruit_NeoPixel strip = Adafruit_NeoPixel(ANZ_LEDs, PIN, NEO_GRB + NEO_KHZ800)
   int LEDon2[4]={ANZ_LEDs-1, ANZ_LEDs, ANZ_LEDs+1, ANZ_LEDs+2};
   boolean UpDown1[4]={true, true, true, true};
   boolean UpDown2[4]={false, false, false, false};
+  int Zaehler = 0;
   
   int Brightness[]={255, 255/4*3, 255/2, 255/4};
   
@@ -60,7 +61,7 @@ void TOR()
   strip.setBrightness(255);  //Helligkeit wieder hochsetzen
   
   //Torshow-Effekt
-  for(int j=0; j<100; j++)
+  while (Zaehler<3)
   {
     //Einzel-LEDs einer Welle neu setzen
     for(int i=0; i<4; i++)
@@ -80,6 +81,8 @@ void TOR()
       //Richtung überprüfen und ggf. ändern
       if (LEDon1[i] == 0) {UpDown1[i] = true; }
       else if (LEDon1[i] == (ANZ_LEDs-1)) {UpDown1[i] = false; }
+      
+      if ( i == 0 && LEDon1[0]==0 ) { Zaehler++; }
     
       //2. Welle
       if(LEDon2[i]<ANZ_LEDs)        //Sicherstellen dass im negativen Array-Bereich gearbeitet wird
@@ -97,18 +100,17 @@ void TOR()
       if (LEDon2[i] == 0) {UpDown2[i] = true; }
       else if (LEDon2[i] == (ANZ_LEDs-1)) {UpDown2[i] = false; }
     }  //Ende For-Schleife/LEDs der Wellen neugesetzt
-  }  //Ende For-Schleife/Ende Torshow-Effekt
     
   LEDsbeschreiben();
   LEDArrayLeeren();
   
   delay(DELAY);
-  }
+  }  //Ende For-Schleife/Ende Torshow-Effekt
 }
 
 void LEDArrayLeeren(void)
 {
-  for(int i=0; i<ANZ_LEDs; i++)  { stripArray[i] = 0; }
+  for(int i=0; i<ANZ_LEDs; i++)  { stripArray[i][0] = 0; stripArray[i][1] = 0;stripArray[i][2] = 0;}
   return;
 }
 
