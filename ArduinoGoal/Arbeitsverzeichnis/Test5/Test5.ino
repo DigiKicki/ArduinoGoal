@@ -1,7 +1,5 @@
-#include <NeoPixel_AddOn.h>
-
 #include <Adafruit_NeoPixel.h>
-//#include <NeoPixel_AddOn.h>
+#include <NeoPixel_AddOn.h>
 
 
   #define PIN 6  
@@ -11,7 +9,7 @@
   #define ANZ_LEDs 110
   
 NeoPixel_AddOn STRIP = NeoPixel_AddOn(PIN, LongSide, ShortSide);
-Adafruit_NeoPixel strip = Adafruit_NeoPixel(2*(LongSide+ShortSide), PIN, NEO_GRB + NEO_KHZ800);
+//Adafruit_NeoPixel strip = Adafruit_NeoPixel(2*(LongSide+ShortSide), PIN, NEO_GRB + NEO_KHZ800);
 
 
   int stripArray[ANZ_LEDs][3];
