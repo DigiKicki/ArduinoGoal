@@ -1,20 +1,20 @@
+#include <analogComp.h>
+
 int LEDInaktiv=5; //Led wenn Lichtschranke nicht durchbrochen
 int LEDAktiv=6; //Led wenn Lichtschranke durchbrochen
 int PhotoDiode=0;
 //Analoger Eingang der Photodiode
-int value=0; //Messdaten
-int grenzwert = 20;
-volatile boolean interrupt;
+//int value=0; //Messdaten
+//int grenzwert = 20;
+volatile boolean goal;
 
 void setup()
 {
   Serial.begin(9600);
   
-  // Set ACSR Register for analog interrupt
-  ACSR =  _BV (ACBG)    // set internal bandgap (1.1V)
-        | _BV (ACI)     // (Clear) Analog Comparator Interrupt Flag
-        | _BV (ACIE)    // Analog Comparator Interrupt Enable
-        | _BV (ACIS1);  // ACIS1, ACIS0: Analog Comparator Interrupt Mode Select (trigger on falling edge)
+  // enable analog comparator using internal reference voltage (1.1V) and analog pin 0 for input voltage
+  analogComparator.setOn(INTERNAL_REFERENCE, PhotoDiode);
+  analogComparator.enableInterrupt(goalDetected, FALLING);
   
   //benötigte Ports aktivieren
   pinMode(LEDAktiv, OUTPUT);
@@ -28,13 +28,12 @@ void setup()
 
 void loop()
 {
-  if (interrupt) {
-    interrupt = false;
+  if (goal) {
     Serial.println("TOOOOOOOOOOOOOOOOOOOOOOR");
+    goal = false;
   }
 }
 
-ISR(ANALOG_COMP_vect)
-{
-  interrupt=true;
+void goalDetected() {
+  goal = true;
 }
