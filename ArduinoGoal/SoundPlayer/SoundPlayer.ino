@@ -32,7 +32,8 @@ void setup() {
 }
 
 void loop(){
-  //playSound("tor");
+  playSound("tor2.wav");
+  delay(500);
 }
 
 void playSound_P(const char *name){
@@ -51,5 +52,9 @@ void playSound_P(const char *name){
     Serial.println("wave.create failed");
   }
   wave.play();
+  while (wave.isplaying) {
+    //playing
+  }
+  wave.stop();
 
 }
