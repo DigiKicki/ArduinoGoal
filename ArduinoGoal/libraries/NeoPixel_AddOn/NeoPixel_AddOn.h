@@ -8,33 +8,41 @@
 #define NEOPIXEL_ADDON_H
 
 // include types & constants of Wiring core API
-#include "WConstants.h"
+#include "Arduino.h"
 #include "Adafruit_NeoPixel.h"
 
 // library interface description
 class NeoPixel_AddOn
 {
   public:
-	NeoPixel_AddOn( int, int, int);
+	NeoPixel_AddOn( int PIN, int LongSide, int ShortSide);
 	~NeoPixel_AddOn();
 
-	Adafruit_NeoPixel strip = Adafruit_NeoPixel(2*(LongSide+ShortSide), PIN, NEO_GRB + NEO_KHZ800);
+  private:
+	boolean Team;
 
-	int ANZ_LEDs = 2*(LongSide+ShortSide);
+	int ANZ_LEDs;
 
-	int StripArray[ANZ_LEDs][3]
+	int StripArray[110][3];
 
+	void LEDArrayLeeren(void);
 
-  public:
-    Test(int);
-    void LEDArrayLeeren(void)
-	{
-		for(int i=0; i<20; i++)  { StripArray[i][0] = 0; StripArray[i][1] = 0; StripArray[i][2] = 0;}
-		return;
-	};
+	void LEDsbeschreiben(void);
 
+public:
 
-};
+	int ColorTeamBlue[4][3];
+	int ColorTeamYellow[4][3];
 
-#endif NEOPIXEL_ADDON_H
+	void TOR(boolean Team);
+
+/////////////////////////////Weis-Helligkeits-Funktionen/////////////////////////////
+	void WeisHelligkeitReduzieren (void);
+
+	void WeisHelligkeitAnheben (void);
+
+/////////////////////////////Tor-Show-Funktionen/////////////////////////////
+	void TwoWaves(boolean);
+
+#endif //NEOPIXEL_ADDON_H
 
