@@ -3,7 +3,7 @@
 
 
   #define PIN 6  
-  #define DELAY 100
+  #define DELAY 50
   #define LongSide 35
   #define ShortSide 20
   #define ANZ_LEDs 110
@@ -17,7 +17,7 @@ Adafruit_NeoPixel strip = Adafruit_NeoPixel(2*(LongSide+ShortSide), PIN, NEO_GRB
   int TestCounter = 0;
   
   int ColorTeamBlue[4][3]={{0, 0, 255}, {0, 0, 255/4*3}, {0, 0, 255/2}, {0, 0, 255/4}};
-  int ColorTeamYellow[4][3]={{255, 255, 0}, {255/4*3, 255/4*3, 0}, {255/2, 255/2, 0}, {255/4, 255/4, 0}};
+  int ColorTeamYellow[4][3]={{255, 180, 0}, {255/4*3, 180/4*3, 0}, {255/2, 180/2, 0}, {255/4, 180/4, 0}};
   
 
 void setup()
@@ -134,14 +134,20 @@ void StripTwoWaves(boolean Team, int Limit)
         {
           if( ColorTeamYellow[i][0] > stripArray[LEDon1[i]][0] )        //Kontrolle ob neuer Farb größer ist als bisherige
           {
-            stripArray[LEDon1[i]][0] = ColorTeamYellow[i][0];           //Farbwerte wird auf Strip-Array geschrieben
+            for(int k=0; k<3; k++)
+            {
+              stripArray[LEDon1[i]][k] = ColorTeamYellow[i][k];           //Farbwerte wird auf Strip-Array geschrieben
+            }
           }
         }
         else        //Farb-Auswahl: Blau
         {
           if( ColorTeamBlue[i][2] > stripArray[LEDon1[i]][2] )        //Kontrolle ob neuer Farb größer ist als bisherige
           {
-            stripArray[LEDon1[i]][2] = ColorTeamBlue[i][2];           //Farbwerte wird auf Strip-Array geschrieben
+            for(int k=0; k<3; k++)
+            {
+              stripArray[LEDon1[i]][k] = ColorTeamBlue[i][k];           //Farbwerte wird auf Strip-Array geschrieben
+            }
           }
         }
       }
@@ -162,14 +168,20 @@ void StripTwoWaves(boolean Team, int Limit)
         {
           if( ColorTeamYellow[i][0] > stripArray[LEDon2[i]][0] )        //Kontrolle ob neuer Farb größer ist als bisherige
           {
-            stripArray[LEDon2[i]][0] = ColorTeamYellow[i][0];           //Farbwerte wird auf Strip-Array geschrieben
+            for(int k=0; k<3; k++)
+            {
+              stripArray[LEDon2[i]][k] = ColorTeamYellow[i][k];           //Farbwerte wird auf Strip-Array geschrieben
+            }
           }
         }
         else        //Farb-Auswahl: Blau
         {
           if( ColorTeamBlue[i][2] > stripArray[LEDon2[i]][2] )        //Kontrolle ob neuer Farb größer ist als bisherige
           {
-            stripArray[LEDon2[i]][2] = ColorTeamBlue[i][2];           //Farbwerte wird auf Strip-Array geschrieben
+            for(int k=0; k<3; k++)
+            {
+              stripArray[LEDon1[i]][k] = ColorTeamBlue[i][k];           //Farbwerte wird auf Strip-Array geschrieben
+            }
           }
         }
       }
