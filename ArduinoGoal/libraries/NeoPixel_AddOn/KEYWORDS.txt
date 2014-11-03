@@ -1,0 +1,5 @@
+NeoPixel_AddOn	KEYWORD1
+
+LEDArrayLeeren	KEYWORD2
+LEDsbeschreiben	KEYWORD2
+TOR	KEYWORD2

@@ -17,13 +17,13 @@ class NeoPixel_AddOn
   public:
 	NeoPixel_AddOn( int PIN, int LongSide, int ShortSide);
 	~NeoPixel_AddOn();
-
+		
   private:
 	boolean Team;
 
 	int ANZ_LEDs;
-
-	int StripArray[110][3];
+	int stripArray[110][3];
+	Adafruit_NeoPixel strip;
 
 	void LEDArrayLeeren(void);
 
@@ -43,6 +43,6 @@ public:
 
 /////////////////////////////Tor-Show-Funktionen/////////////////////////////
 	void TwoWaves(boolean);
-
+};
 #endif //NEOPIXEL_ADDON_H
 
