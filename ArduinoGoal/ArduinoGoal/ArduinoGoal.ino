@@ -11,6 +11,14 @@ long time = 0;
 
 void setup()
 {
+  // AIN0 PIN6
+  // AIN1 Pin7
+  //380mV - 100mV
+  // pwm -> 220mV
+  //Timer 2 pwm pins: 3,11
+  // prescaler auf min
+  TCCR2B = TCCR2B & 0b11111000 | _BV(CS20);
+  
   Serial.begin(9600);
   
   // enable analog comparator using internal reference voltage (1.1V) and analog pin 0 for input voltage
@@ -24,7 +32,7 @@ void setup()
   pinMode(PhotoDiode, INPUT);
   //IR Led einschalten
   //digitalWrite(LEDIr,HIGH); //einschalten der IR Diode
-  //analogWrite(5, 1);
+  analogWrite(3, 100);
   time = millis();
 }
 
