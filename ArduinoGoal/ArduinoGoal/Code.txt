@@ -1,0 +1,29 @@
+/*
+Calibrate pwm value for IR LED so that both photodiodes give the same voltage.
+*/
+void calibrateLedPwm() {
+  //read diode values and determine the "higher" one
+  int diodeVal1 = analogRead(DIODE_PIN_1);
+  int diodeVal2 = analogRead(DIODE_PIN_2);
+  int highVal = max(diodeVal1, diodeVal2);
+  int lowVal = 0;
+  
+  //define pin number of IR LED that needs to be changed
+  int ledPwmPin;
+  int diodePin;
+  if (highVal == diodeVal1) {
+    diodePin = DIODE_PIN_1;
+    ledPwmPin = LED_PIN_1;
+  } else {
+    diodePin = DIODE_PIN_2;
+    ledPwmPin = LED_PIN_2;
+  }
+  
+  //start decreasing pwm until diode values are eequal
+  int pwmVal = PWM_START_VAL;
+  while (highVal != lowVal) {
+    analogWrite(ledPwmPin, pwmVal--);
+    delay(50);
+    highVal = analogRead(diodePin);
+  }
+}
