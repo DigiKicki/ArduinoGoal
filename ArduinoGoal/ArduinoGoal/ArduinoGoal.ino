@@ -8,6 +8,8 @@ int PhotoDiode=0;
 //int grenzwert = 20;
 volatile boolean goal;
 long time = 0;
+int val = 0;
+int minvalue = 9999;
 
 void setup()
 {
@@ -17,34 +19,48 @@ void setup()
   // pwm -> 220mV
   //Timer 2 pwm pins: 3,11
   // prescaler auf min
-  TCCR2B = TCCR2B & 0b11111000 | _BV(CS20);
+  //TCCR2B = TCCR2B & 0b11111000 | _BV(CS20);
   
   Serial.begin(9600);
   
   // enable analog comparator using internal reference voltage (1.1V) and analog pin 0 for input voltage
-  analogComparator.setOn(AIN0, PhotoDiode);
-  analogComparator.enableInterrupt(goalDetected, FALLING);
+  //analogComparator.setOn(AIN0, PhotoDiode);
+  //analogComparator.enableInterrupt(goalDetected, FALLING);
   
   //benötigte Ports aktivieren
   //pinMode(LEDAktiv, OUTPUT);
   //pinMode(LEDInaktiv, OUTPUT);
   //pinMode(LEDIr, OUTPUT);
   pinMode(PhotoDiode, INPUT);
+  
   //IR Led einschalten
   //digitalWrite(LEDIr,HIGH); //einschalten der IR Diode
-  analogWrite(3, 100);
+  //analogWrite(3, 100);
   time = millis();
 }
 
 void loop()
 {
+
+  val = analogRead(0);
+  if (val < minvalue ) {
+    minvalue = val;
+    Serial.println(minvalue);
+  }
+  
   if (goal && (millis()-time) > 1000) {
     Serial.println("TOOOOOOOOOOOOOOOOOOOOOOR");
     time = millis();
     goal = false;
   }
+  //delay(10);
+}
+
+void serialEvent() {
+  Serial.read();
+  minvalue = 9999;
 }
 
 void goalDetected() {
-  goal = true;
+  //goal = true;
 }
