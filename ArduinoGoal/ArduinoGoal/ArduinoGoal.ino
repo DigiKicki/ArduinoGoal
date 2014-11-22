@@ -22,6 +22,11 @@ void setup()
   pinMode(DIODE_PIN_1, INPUT);
   pinMode(DIODE_PIN_2, INPUT);
   
+  TCCR1B |= _BV(WGM12); // CTC mode
+  TCCR1B |= _BV(CS12); // 256 prescaler
+  TIMSK1 |= _BV(OCIE1A); // enable timer compare interrupt
+
+  
   analogReference(INTERNAL);
   beforeDiodeVal_1 = analogRead(DIODE_PIN_1);
   //beforeDiodeVal_2 = analogRead(DIODE_PIN_2);
@@ -71,3 +76,9 @@ void goalDetected(int pin) {
   }
   time = millis();
 }
+
+ISR(Timer1_COMPA_vect)
+{
+  Serial.println("Sekunde");
+}
+
