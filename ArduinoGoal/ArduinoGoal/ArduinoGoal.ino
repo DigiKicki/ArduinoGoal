@@ -1,22 +1,29 @@
 #include <analogComp.h>
 const int DIODE_PIN_1 = 0;
 const int DIODE_PIN_2 = 1;
-const int MAX_STEPS = 5;
+const int DIODE_THRESHOLD = 5;
+const int MAX_STEPS = 2;
 
+int valueDiff;
 int currentDiodeVal;
 int beforeDiodeVal_1;
 int beforeDiodeVal_2;
 int stepCounter_1;
 int stepCounter_2;
 
+long time;
+
 void setup()
 {
   Serial.begin(9600);
   
+  time = millis();
+  
   pinMode(DIODE_PIN_1, INPUT);
   pinMode(DIODE_PIN_2, INPUT);
   
-  //beforeDiodeVal_1 = analogRead(DIODE_PIN_1);
+  analogReference(INTERNAL);
+  beforeDiodeVal_1 = analogRead(DIODE_PIN_1);
   //beforeDiodeVal_2 = analogRead(DIODE_PIN_2);
 }
 
@@ -24,8 +31,15 @@ void setup()
 
 void loop()
 {
-  checkDiodeValue(DIODE_PIN_1, &beforeDiodeVal_1, &stepCounter_1);
-  checkDiodeValue(DIODE_PIN_2, &beforeDiodeVal_2, &stepCounter_2);
+  int a = analogRead(0);
+  Serial.println(a);
+  delay(50);
+  if ((millis() - time) > 1000) {
+    //checkDiodeValue(DIODE_PIN_1, &beforeDiodeVal_1, &stepCounter_1);
+    delay(10);
+    //checkDiodeValue(DIODE_PIN_2, &beforeDiodeVal_2, &stepCounter_2);
+    //delay(10);
+  }
 }
 
 void serialEvent() {
@@ -34,10 +48,10 @@ void serialEvent() {
 
 void checkDiodeValue(int pin, int* beforeDiodeVal, int* counter) {
   currentDiodeVal = analogRead(pin);
-  if (currentDiodeVal <= *beforeDiodeVal) {
-    *counter++;
-  } else {
-    *counter = 0;
+  valueDiff = abs(*beforeDiodeVal - currentDiodeVal);
+  if (valueDiff >= DIODE_THRESHOLD) {
+    Serial.println(valueDiff);
+    *counter += 1; 
   }
   *beforeDiodeVal = currentDiodeVal;
   
@@ -55,4 +69,5 @@ void goalDetected(int pin) {
     //goal for team blue
     Serial.println("TOOOOOOOOOOR_2");
   }
+  time = millis();
 }
