@@ -38,6 +38,10 @@ void loop()
 {
   int a = analogRead(0);
   Serial.println(a);
+  if(a<340)
+  {
+    Serial.println("Gooooal");
+  }
   delay(50);
   if ((millis() - time) > 1000) {
     //checkDiodeValue(DIODE_PIN_1, &beforeDiodeVal_1, &stepCounter_1);
