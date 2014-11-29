@@ -61,10 +61,10 @@ void goalForTeam(boolean team1) {
     pos1 = POS_RIGHT_DIGIT_1;
     pos2 = POS_RIGHT_DIGIT_2;
   }
-  byte digitLeft = goals / 10;
-  byte digitRight = goals % 10;
-  clockDisplay.writeDigitNum(pos1, digitLeft);
-  clockDisplay.writeDigitNum(pos2, digitRight);
+  byte digit1 = goals / 10;
+  byte digit2 = goals % 10;
+  clockDisplay.writeDigitNum(pos1, digit1);
+  clockDisplay.writeDigitNum(pos2, digit2);
   clockDisplay.drawColon(true);
   clockDisplay.blinkRate(0);
   clockDisplay.writeDisplay();
