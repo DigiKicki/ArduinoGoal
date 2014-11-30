@@ -40,13 +40,13 @@
 /** Port bit number for DAC chip select. */
 #define MCP_DAC_CS_BIT  PIN2_BITNUM
 
-// pin 3 is DAC serial clock
+// pin 3 is DAC serial clock --> changed to 7
 /** Data direction register for DAC clock. */
-#define MCP_DAC_SCK_DDR  PIN3_DDRREG
+#define MCP_DAC_SCK_DDR  PIN7_DDRREG
 /** Port register for DAC clock. */
-#define MCP_DAC_SCK_PORT PIN3_PORTREG
+#define MCP_DAC_SCK_PORT PIN7_PORTREG
 /** Port bit number for DAC clock. */
-#define MCP_DAC_SCK_BIT  PIN3_BITNUM
+#define MCP_DAC_SCK_BIT  PIN7_BITNUM
 
 // pin 4 is DAC serial data in
 
