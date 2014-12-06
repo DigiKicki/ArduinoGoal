@@ -1,40 +1,54 @@
 #include <WaveHC.h>
 #include <WaveUtil.h>
-#include <Adafruit_GFX.h>
+
 #include <Wire.h>
+#include <Adafruit_GFX.h>
 #include <Adafruit_LEDBackpack.h>
+
 #include <analogComp.h>
 
-// CONSTANTS FOR ANALOG INTERRUPT
-#define DIODE_PIN_1 0
-#define DIODE_PIN_2 1
-#define LED_PIN_1 9
-#define LED_PIN_2 10
-#define GOAL_TIME_THRESHOLD 3000
-volatile boolean goal;
-boolean mutex;
+#include <SerialCommunication.h>
 
-// VARIABLES FOR WAVE SHIELD
-SdReader card;    // This object holds the information for the card
-FatVolume vol;    // This holds the information for the partition on the card
-FatReader root;   // This holds the information for the volumes root directory
-FatReader file;   // This object represent the WAV file 
-WaveHC wave;      // This is the only wave (audio) object, since we will only play one at a time
+// ANALOG INTERRUPT CONSTANTS
+#define DIODE_PIN 0
+#define PWM_PIN_REF_V 3
+// analog interrupt variables
+volatile boolean goal1;
+
+// WAVE SHIELD CONSTANTS
 #define playSound(name) playSound_P(PSTR(name))
 #define SOUND_PLAY_TIME 2000
+// wave shield variables
+SdReader card;
+FatVolume vol;
+FatReader root;
+FatReader file; 
+WaveHC wave;
+boolean wavePlaying;
 
-// CONSTANTS FOR 7SEG DISPLAY
+// 7SEG CLOCK DISPLAY CONSTANTS
 #define POS_LEFT_DIGIT_1 0
 #define POS_LEFT_DIGIT_2 1
 #define POS_RIGHT_DIGIT_1 3
 #define POS_RIGHT_DIGIT_2 4
-#define SECOND 1000
-// 7Seg variables
+#define SECOND 1000.0
+#define MINUTE 60.0
+#define TEN 10.0
+// 7Seg clock display variables
 Adafruit_7segment clockDisplay = Adafruit_7segment();
 long playTime;
+long startTime;
 
-//
-long time;
+// serial communication variables
+byte income;
+boolean goal2;
+
+// game variables
+boolean startGame;
+boolean resetGame;
+boolean gameStarted;
+long currentTime;
+long goalTime;
 
 void setup() {
   Serial.begin(9600);
@@ -45,50 +59,90 @@ void setup() {
   
   // SETUP SD CARD
   setupWaveSDCard();
-
+  
   // SETUP ANALOG INTERRUPT
-  analogComparator.setOn(AIN0, DIODE_PIN_1);
+  analogComparator.setOn(AIN0, DIODE_PIN);
   analogComparator.enableInterrupt(ISR_goalDetected, FALLING);
   
-  //TEST
-  //analogWrite(11, 11);
-  //goalDiaplayBlink();
-  //goalTeam1();
-  //playSound("asd.wav");
-  //goal = true;
-  //time = millis();
+  // pwm for reference voltage
+  analogWrite(3, 14);
 }
 
 void loop(){
-  //Serial.println("asd");
-  
-  if (goal && !mutex) {
-    mutex = true;
-    //asd();
-    time = millis();
-    
-    playSound("FloMega.wav");
-    
+  // get current time only during a game
+  if (startGame || gameStarted || wavePlaying) {
+    currentTime = millis();
   }
   
-  long currentTime = millis();
-  
-  if (currentTime - time > GOAL_TIME_THRESHOLD && mutex) {
-    goal = mutex = false;
-    analogComparator.enableInterrupt(ISR_goalDetected, FALLING);
-  }
-  
-  
-  if (currentTime - playTime >= SECOND) {
-    displayTime(currentTime);
-    playTime = currentTime;
+  // reset a running game
+  if (resetGame) {
+    gameStarted = resetGame = false;
+    startGame = true;
   }
 
-  if (currentTime - time >= SOUND_PLAY_TIME) {
+  // start a new game
+  if (startGame) {
+    setupDisplay();
+    gameStarted = true;
+    startGame = false;
+    startTime = playTime = currentTime;
+    playSound("start.wav");
+  }
+  
+  // display game time when a game is started
+  if (gameStarted && currentTime - playTime >= SECOND) {
+    displayTime(currentTime - startTime);
+    playTime = currentTime;
+  }
+  
+  // play goal sounds and send goal time
+  if (gameStarted && (goal1 || goal2)) {
+    goalTime = millis();
+    if (goal1) {
+      Serial.write(SERIAL_GOAL_UNO);
+      playSound("tor1.wav");
+      analogComparator.enableInterrupt(ISR_goalDetected, FALLING);
+    } else {
+      Serial.write(SERIAL_GOAL_ANSWER);
+      playSound("tor2.wav");
+    }
+    Serial.write(getMinute(goalTime - startTime));
+    Serial.write(getSecond(goalTime - startTime));
+    goal1 = goal2 = false;
+  }
+  
+  // finish running game after 10 minutes, send signal and play sound
+  if (gameStarted && currentTime - startTime >= SECOND * MINUTE * TEN) {
+    Serial.write(SERIAL_TIME_OVER);
+    gameStarted = false;
+    playSound("ende.wav");
+  }
+  
+  // stop playing sound
+  if (wavePlaying && currentTime - goalTime >= SOUND_PLAY_TIME) {
     wave.stop();
+    wavePlaying = false;
   }
 }
 
+void serialEvent() {
+  income = Serial.read();
+  switch (income) {
+    case SERIAL_GOAL_MEGA:
+    // goal from other team
+    goal2 = true;
+    case SERIAL_TIME_START:
+    // start game
+    if (!gameStarted) {
+      startGame = true;
+    }
+    case SERIAL_TIME_RESET:
+    // reset game
+    resetGame = true;
+  }
+}
+
+// init 7Seg clock with '00:00'
 void setupDisplay() {
   clockDisplay.writeDigitNum(POS_LEFT_DIGIT_1, 0);
   clockDisplay.writeDigitNum(POS_LEFT_DIGIT_2, 0);
@@ -98,51 +152,57 @@ void setupDisplay() {
   clockDisplay.writeDisplay();
 }
 
+// displays a time (time in millis)
 void displayTime(long time) {
-  int TimerValueSec = time/1000;
-  int DisplayTimeMin = TimerValueSec/60;
-  int DisplayTimeSec = TimerValueSec-(DisplayTimeMin*60);
-  byte digit1 = DisplayTimeMin / 10;
-  byte digit2 = DisplayTimeMin % 10;
+  byte digit1 = getMinute(time) / 10;
+  byte digit2 = getMinute(time) % 10;
   clockDisplay.writeDigitNum(POS_LEFT_DIGIT_1, digit1);
   clockDisplay.writeDigitNum(POS_LEFT_DIGIT_2, digit2);
-  digit1 = DisplayTimeSec / 10;
-  digit2 = DisplayTimeSec % 10;
+  digit1 = getSecond(time) / 10;
+  digit2 = getSecond(time) % 10;
   clockDisplay.writeDigitNum(POS_RIGHT_DIGIT_1, digit1);
   clockDisplay.writeDigitNum(POS_RIGHT_DIGIT_2, digit2);
   clockDisplay.writeDisplay();
 }
 
+// setup wave shield and sd card
 void setupWaveSDCard() {
   if (!card.init()){
-    Serial.println("card.init failed");
+    Serial.println("failed to init SD Card");
   }
-  // enable optimize read - some cards may timeout. Disable if you're having problems
   card.partialBlockRead(true);
   if (!vol.init(card)){
-    Serial.println("vol.init failed");
+    Serial.println("failed to init volume");
   }
   if (!root.openRoot(vol)){
-    Serial.println("openRoot failed");
+    Serial.println("failed to open root folder");
   }
 }
 
+// play wave file by name
 void playSound_P(const char *name){
   char myname[13];
-  // copy flash string to RAM
   strcpy_P(myname, name);
-  // open file by name
   if (!file.open(root, myname)){
-    Serial.println("open by name failed"); 
+    Serial.print("failed to open wave file: ");Serial.println(myname);
   }
-  // create wave and start play
   if (!wave.create(file)){
-    Serial.println("wave.create failed");
+    Serial.print("failed to create wave file: ");Serial.println(myname);
   }
   wave.play();
+  wavePlaying = true;
 }
 
+// interrupt service routine for made goals
 void ISR_goalDetected() {
   analogComparator.disableInterrupt();
-  goal = true;
+  goal1 = true;
+}
+
+byte getSecond(long time) {
+  return byte((time/SECOND) - (getMinute(time)*MINUTE));
+}
+
+byte getMinute(long time) {
+  return byte(time/(SECOND*MINUTE));
 }
