@@ -12,12 +12,14 @@
 // ANALOG INTERRUPT CONSTANTS
 #define DIODE_PIN 0
 #define PWM_PIN_REF_V 3
+#define INTERRUPT_ENABLE_DURATION 3000
 // analog interrupt variables
 volatile boolean goal1;
+boolean enableAgain;
 
 // WAVE SHIELD CONSTANTS
 #define playSound(name) playSound_P(PSTR(name))
-#define SOUND_PLAY_TIME 2000
+#define SOUND_PLAY_TIME 36000
 // wave shield variables
 SdReader card;
 FatVolume vol;
@@ -38,6 +40,7 @@ boolean wavePlaying;
 Adafruit_7segment clockDisplay = Adafruit_7segment();
 long playTime;
 long startTime;
+boolean goalBlink;
 
 // serial communication variables
 byte income;
@@ -65,7 +68,7 @@ void setup() {
   analogComparator.enableInterrupt(ISR_goalDetected, FALLING);
   
   // pwm for reference voltage
-  analogWrite(3, 14);
+  analogWrite(3, 22);
 }
 
 void loop(){
@@ -85,12 +88,12 @@ void loop(){
     setupDisplay();
     gameStarted = true;
     startGame = false;
-    startTime = playTime = currentTime;
+    startTime = playTime = goalTime = currentTime;
     playSound("start.wav");
   }
   
   // display game time when a game is started
-  if (gameStarted && currentTime - playTime >= SECOND) {
+  if (!goalBlink && gameStarted && currentTime - playTime >= SECOND) {
     displayTime(currentTime - startTime);
     playTime = currentTime;
   }
@@ -98,10 +101,14 @@ void loop(){
   // play goal sounds and send goal time
   if (gameStarted && (goal1 || goal2)) {
     goalTime = millis();
+    if (wavePlaying) {
+      wave.stop();
+    }
     if (goal1) {
       Serial.write(SERIAL_GOAL_UNO);
       playSound("tor1.wav");
       analogComparator.enableInterrupt(ISR_goalDetected, FALLING);
+      enableAgain = true;
     } else {
       Serial.write(SERIAL_GOAL_ANSWER);
       playSound("tor2.wav");
@@ -109,13 +116,25 @@ void loop(){
     Serial.write(getMinute(goalTime - startTime));
     Serial.write(getSecond(goalTime - startTime));
     goal1 = goal2 = false;
+    goalDisplayBlink();
   }
   
   // finish running game after 10 minutes, send signal and play sound
-  if (gameStarted && currentTime - startTime >= SECOND * MINUTE * TEN) {
+  if (gameStarted && currentTime - startTime > SECOND * MINUTE * TEN + 900) { // 900 millis offset to reach 10 minutes
     Serial.write(SERIAL_TIME_OVER);
     gameStarted = false;
+    goalTime = currentTime;
     playSound("ende.wav");
+  }
+  
+  if (goalBlink && gameStarted && currentTime - goalTime >= GOAL_BLINK_DURATION) {
+    goalBlink = false;
+  }
+  
+  // enable interrupt
+  if (enableAgain && currentTime - goalTime >= INTERRUPT_ENABLE_DURATION) {
+    analogComparator.enableInterrupt(ISR_goalDetected, FALLING);
+    enableAgain = false;
   }
   
   // stop playing sound
@@ -162,6 +181,8 @@ void displayTime(long time) {
   digit2 = getSecond(time) % 10;
   clockDisplay.writeDigitNum(POS_RIGHT_DIGIT_1, digit1);
   clockDisplay.writeDigitNum(POS_RIGHT_DIGIT_2, digit2);
+  clockDisplay.drawColon(true);
+  clockDisplay.blinkRate(0);
   clockDisplay.writeDisplay();
 }
 
@@ -205,4 +226,15 @@ byte getSecond(long time) {
 
 byte getMinute(long time) {
   return byte(time/(SECOND*MINUTE));
+}
+
+void goalDisplayBlink() {
+  clockDisplay.writeDigitNum(POS_LEFT_DIGIT_1, LETTER_G);
+  clockDisplay.writeDigitNum(POS_LEFT_DIGIT_2, LETTER_O);
+  clockDisplay.writeDigitRaw(POS_RIGHT_DIGIT_1, LETTER_A);
+  clockDisplay.writeDigitRaw(POS_RIGHT_DIGIT_2, LETTER_L);
+  clockDisplay.drawColon(false);
+  clockDisplay.blinkRate(1);
+  clockDisplay.writeDisplay();
+  goalBlink = true;
 }
