@@ -1,3 +1,12 @@
+//////////////////////////////////////////////////////////////////////////////////
+/// Dateiname: Mega.ino                                                        ///
+/// Stand: 30.12.2014                                                          ///
+/// Aufgaben: Beleuchtung, Spielstands-Anzeige, Torerkennung für 1 Tor         ///
+//////////////////////////////////////////////////////////////////////////////////
+
+/////////////////////////////////////////////////////---LIBRARIES---////////////////////////////////////////////////////////
+#include <PinChangeInt.h>
+#include <PinChangeIntConfig.h>
 #include <Adafruit_NeoPixel.h>
 #include <Adafruit_LEDBackpack.h>
 #include <Adafruit_GFX.h>
@@ -16,6 +25,7 @@
 #define MidpointLongSideLeft 69
 #define MidpointShortSideBlue 43
 #define MidpointShortSideYellow 95
+#define internalDelayShowScoreDelay 100
   
   // CONSTANTS FOR 7SEG DISPLAY
 #define LETTER_G 6
@@ -32,12 +42,12 @@
 
 // CONSTANTS FOR ANALOG INTERRUPT
 #define DIODE_PIN 0
-#define LED_PIN 6
 #define GOAL_TIME_THRESHOLD 3000
-#define REFERENCE_PIN 0
-#define REFERENCE_VALUE 125
+#define PWM_PIN_REF_V 6
+#define REFERENCE_VALUE 14
 
 // CONSTANTS FOR BUTTONS
+// Vorbereitung für Bedienpanel (6. Semester)
 #define START_BUTTON_PIN 8
 #define HOLD_TIME_THRESHOLD 3000
 #define CONTACT_CHATTER_TIME 10
@@ -63,15 +73,15 @@
   int LastEvent = 0;
   volatile boolean SHOWSCORE = false;
   
-  //Definition der Team-Farben Gelb und Blau im RGB-Code in 5 Stufen
-  //Die Stufen werden für die Wellen verwendet, bei der die Helligkeit schrittweise herabgesetzt wird.
+    //Definition der Team-Farben Gelb und Blau im RGB-Code in 5 Stufen
+    //Die Stufen werden für die Wellen verwendet, bei der die Helligkeit schrittweise herabgesetzt wird.
   int ColorTeamBlue[5][3]={{0, 0, 255}, {0, 0, 255/5*4}, {0, 0, 255/5*3}, {0, 0, 255/5*2}, {0, 0, 255/5*1}};
   int ColorTeamYellow[5][3]={{255, 180, 0}, {255/5*4, 180/5*4, 0}, {255/5*3, 180/5*3, 0}, {255/5*2, 180/5*2, 0}, {255/5*1, 180/5*1, 0}};
   
-  //  VARIABLES FOR SCORE
+  //  VARIABLES FOR 7SEG DISPLAY
   Adafruit_7segment scoreDisplay = Adafruit_7segment();
-  int ScoreTeamYellow = 3;
-  int ScoreTeamBlue = 9;
+  int ScoreTeamYellow = 0;
+  int ScoreTeamBlue = 0;
   
   //  VARIABLES FOR ANALOG INTERRUPT
   volatile boolean goal_Yellow;
@@ -88,41 +98,26 @@
   
 void setup()
 {
+  //  SETUP SERIAL COMMUNICATION
   Serial.begin(9600);    // startet serielle Konsole
   Serial1.begin(9600);   // startet serielle Kommunikation S1:  Pin19 (RX, Empfänger), Pin18 (TX, Sender)
   
-  Serial.println("Hallo!");
-  pinMode(13, OUTPUT);
-
+  //  SETUP 7SEG DISPLAY
   scoreDisplay.begin(0x70);
   scoreDisplay.setBrightness(0);
-  scoreDisplay.print(10000);
-  scoreDisplay.drawColon(true);
+  scoreDisplay.print(10000);        //Schreibt auf Display: - -:- -
+  scoreDisplay.drawColon(true);     //Doppelpunkt wird eingeschaltet
   scoreDisplay.writeDisplay();
-
-  //  SETUP BUTTONS INTERRUPTS
-  /*attachInterrupt(0, ISR_scoreYellowIncrease, RISING);  //Button Gelb+1, Pin 2
-  attachInterrupt(1, ISR_scoreYellowDecrease, RISING);  //Button Gelb-1, Pin 3
-  attachInterrupt(5, ISR_scoreBlueIncrease, RISING);    //Button Blau+1, Pin 18
-  attachInterrupt(4, ISR_scoreBlueDecrease, RISING);    //Button Blau-1, Pin 19*/
-  
-  attachInterrupt(4, CountHoldTime, RISING);    //Button Blau-1, Pin 19
-  
-  /*pinMode(START_BUTTON_PIN, INPUT);
-  digitalWrite(START_BUTTON_PIN, HIGH);
-  *digitalPinToPCMSK(START_BUTTON_PIN) |= bit (digitalPinToPCMSKbit(START_BUTTON_PIN));  // enable pin
-  PCIFR  |= bit (digitalPinToPCICRbit(START_BUTTON_PIN)); // clear any outstanding interrupt
-  PCICR  |= bit (digitalPinToPCICRbit(START_BUTTON_PIN)); // enable interrupt for the group */
   
   //  SETUP LED STRIP
   STRIP.begin();
-  STRIP.clear();  //
-  STRIP.show();
+  STRIP.clear();    //komplettes Schieberegister wird geleert
+  STRIP.show();     //Alle LEDs sind sicher ausgeschaltet
   
   // SETUP ANALOG INTERRUPT
-  //analogComparator.setOn(AIN0, DIODE_PIN);
-  //analogComparator.enableInterrupt(ISR_goalDetected, FALLING);
-  analogWrite(REFERENCE_PIN, REFERENCE_VALUE);    //PWM-Signal für die Referenzspannung
+  analogComparator.setOn(AIN0, DIODE_PIN);
+  analogComparator.enableInterrupt(ISR_goalDetected, FALLING);
+  analogWrite(PWM_PIN_REF_V, REFERENCE_VALUE);    //PWM-Signal für die Referenzspannung
   
   // SETUP TIMERS
   noInterrupts();           // disable all interrupts
@@ -131,23 +126,20 @@ void setup()
   TCCR1B = 0;
   TCNT1  = 0;
   
-  OCR1A = 62500;            // compare match register 16MHz/256/2Hz
-  TCCR1B |= _BV(WGM12); // CTC mode
-  TCCR1B |= _BV(CS12); // 256 prescaler
+  OCR1A = 62500;         // compare match register 16MHz/256/2Hz
+  TCCR1B |= _BV(WGM12);  // CTC mode
+  TCCR1B |= _BV(CS12);   // 256 prescaler
   TIMSK1 |= _BV(OCIE1A); // enable timer compare interrupt
   interrupts();
   
   StartShow();
+  startMatch = true;     //Spiel wird automatisch gestartet
 }
 
 /////////////////////////////////////////////////////---ISR---////////////////////////////////////////////////////////
 
 ISR(TIMER1_COMPA_vect)
 {
-  digitalWrite(13, digitalRead(13) ^ 1);
-  Serial.println("----");
-
- 
   //Tor-Erkennung freischalten
   if(CountDisabledGoalDetection = true)
   {
@@ -160,25 +152,21 @@ ISR(TIMER1_COMPA_vect)
   
   //Zeit seit letztem Ereignis zählen, ggf. ShowScore freischalten
   if(activeMatch == true)  {LastEvent++; }
-  if(LastEvent==10 && activeMatch==true && ScoreTeamYellow > 0 && ScoreTeamBlue > 0)      //alle 3 Minuten erscheint Spielstands-Effekt WENN mindestens 1 Tor erzielt wurde
+  if(LastEvent==120 && activeMatch==true && ScoreTeamYellow > 0 && ScoreTeamBlue > 0)      //alle 3 Minuten erscheint Spielstands-Effekt WENN mindestens 1 Tor erzielt wurde
   {
     SHOWSCORE = true;
   }
 }
 
-
-ISR (PCINT0_vect) // handle pin change interrupt for D8 to D13 here
-{    
-  CountHoldTime();
-} 
-
 /////////////////////////////////////////////////////---LOOP---////////////////////////////////////////////////////////
 
 void loop()
 {
+  //Tor-Abfrage über Boolean-Variabeln
   if(goal_Yellow)  { GOAL(true); }
   if(goal_Blue)    { GOAL(false); }
   
+  //Abfrage ob Spielstand korregiert wurde
   if(ScoreCorrected)
   {
     WriteScoreOnDisplay(true);     //Spielstand Team Gelb aktualisieren
@@ -186,16 +174,17 @@ void loop()
     ScoreCorrected = false;
   }
   
-  
-  
+  //Abfrage des Start-Buttons
   if(startMatch)  { startMatch = false; MatchStart(false); }
   if(restartMatch)  { restartMatch = false; MatchStart(true); }
   
+  //Abfrage ob Spielende-Kommando über Serielle Kom. eingetroffen ist
   if(stopMatch)  { MatchEnd(); }
+  
+  //Abfrage ob 2 Minuten seit dem letzten Event vergangen sind und der Spielstand mit LEDs visualisiert werden soll
   if(SHOWSCORE)
   {
     SHOWSCORE = false;
-    Serial.println("ShowScore1");
     ShowScore();
   }
 }
@@ -204,13 +193,13 @@ void loop()
 
 void serialEvent1()
 {
-  incomingByte = Serial1.read();
+  incomingByte = Serial1.read();    //erstes Byte wird aus Buffer ausgelesen mit anschließender Fallunterscheidung
       
   switch(incomingByte)
   {
     case SERIAL_TIME_OVER: activeMatch=false; stopMatch=true; break;
-    case SERIAL_GOAL_UNO: delay(100); GoalTimeMinutes=Serial1.read(); GoalTimeSeconds=Serial1.read(); goal_Yellow=true; break; //------<<Bool-Wert anpassen Teamabhängig
-    case SERIAL_GOAL_ANSWER: delay(100); GoalTimeMinutes=Serial1.read(); GoalTimeSeconds=Serial1.read(); break;
+    case SERIAL_GOAL_UNO: delay(5); GoalTimeMinutes=Serial1.read(); GoalTimeSeconds=Serial1.read(); goal_Yellow=true; break; //------<<Bool-Wert anpassen Teamabhängig
+    case SERIAL_GOAL_ANSWER: delay(5); GoalTimeMinutes=Serial1.read(); GoalTimeSeconds=Serial1.read(); break;
     default: break;
   }
 }
@@ -229,6 +218,8 @@ void ISR_goalDetected() {
   goal_Blue = true; //--------------------<<variabel anpassen, teamabhängig
   SendSerialByte(SERIAL_GOAL_MEGA);
 }
+
+//-----------------------------------Vorbereitung für Bedienpanel (6. Semester)-----------------------------------------//
 
 void ISR_scoreYellowIncrease()
 {
@@ -267,36 +258,27 @@ void ISR_scoreBlueDecrease()
 }
 
 
-void CountHoldTime(void)
+void ISR_Start_Button(void)
 {
-  long End_HoldTime = 0;
-  //Serial.println("hello");
-  if(digitalRead(19))
+  noInterrupts(); 
+  
+  if(activeMatch)
   {
-    Serial.println("HoldTimeStart");
-    startMatch=true;
-    
-    Start_HoldTime = millis(); 
+    SendSerialByte(SERIAL_TIME_RESET);
+    restartMatch = true;
   }
-  else
+  else if (!activeMatch)
   {
-    Serial.println("HoldTimeStop");
-    End_HoldTime = millis();
-
-    if(activeMatch && End_HoldTime - Start_HoldTime >= HOLD_TIME_THRESHOLD)
-    {
-      SendSerialByte(SERIAL_TIME_RESET);
-      restartMatch = true;
-    }
-    else if (!activeMatch)
-    {
-      SendSerialByte(SERIAL_TIME_START);
-      startMatch = true;
-    }
+    SendSerialByte(SERIAL_TIME_START);
+    startMatch = true;
   }
+  
+  delay(CONTACT_CHATTER_TIME);    //um Schalterprellen zu blockieren
+  interrupts();
   return;
 }
 
+/////////////////////////////////////////////////////---7SEG DISPLAY---////////////////////////////////////////////////////////
 
 void WriteScoreOnDisplay(boolean Team)
 {
@@ -328,11 +310,10 @@ void WriteScoreOnDisplay(boolean Team)
   return;
 }
 
+/////////////////////////////////////////////-----GOAL-----/////////////////////////////////////////////////
 
 void GOAL(boolean Team)
 {
-  Serial.println("TOR");
-  
   DecreaseBrightness(30);      //Helligkeit wird reduziert umd Tor-Show starten zu können
   
   WriteScoreOnDisplay(Team);   //Digiale Anzeige wird aktualisiert
@@ -432,8 +413,6 @@ void DecreaseBrightness (int delaytime)
     STRIP.show();
     delay(delaytime);
   }
-  STRIP.setBrightness(255);  //Helligkeit wieder hochsetzen
-  
   return;
 }
 
@@ -474,7 +453,6 @@ void StartShow()
   IncreaseBrightness(60);
   Rotation360();
   Blinking(3,  250, 250);
-  
   return;
 }
 
@@ -488,18 +466,15 @@ void MatchStart(boolean RESTART)
   {
     DecreaseBrightness(60);
     scoreDisplay.setBrightness(0);
+    ScoreTeamYellow = 0;
+    ScoreTeamBlue = 0;
   }
-  
-  ScoreTeamYellow = 0;
-  ScoreTeamBlue = 0;
-  Serial.println("Score");
-  WriteScoreOnDisplay(true);
-  WriteScoreOnDisplay(false);
 
-  
   DecreaseBrightness(30);
   setArrayColor(255, 255, 255);    //Array auf Weis setzen
   scoreDisplay.setBrightness(15);  //Schaltet Display ein
+  WriteScoreOnDisplay(true);
+  WriteScoreOnDisplay(false);
   IncreaseBrightness(30);
   return;
 }
@@ -516,18 +491,20 @@ void EndShow()
   stopMatch = false;
   
   //Abschluss-Show
-  scoreDisplay.blinkRate(1);    //Display blinkt mit Endstand
+  scoreDisplay.blinkRate(1);      //Display blinkt mit Endstand
   DecreaseBrightness(30);
   
+  //LEDs in Sieger-Farbe einfärben, bei Unentschieden: Halb-Halb
   if(ScoreTeamYellow > ScoreTeamBlue)  { setArrayColor(ColorTeamYellow[0][0], ColorTeamYellow[0][1], ColorTeamYellow[0][2]); }
   else if(ScoreTeamYellow > ScoreTeamBlue)  { setArrayColor(ColorTeamBlue[0][0], ColorTeamBlue[0][1], ColorTeamBlue[0][2]); }
   else if(ScoreTeamYellow == ScoreTeamBlue)  { setArrayColorHalfHalf(); }
   
   IncreaseBrightness(30);
   Blinking(3,  250, 250);
-  scoreDisplay.blinkRate(0);    //Ausschalten des Blinken des Displays
+  scoreDisplay.blinkRate(0);      //Ausschalten des Blinken des Displays
   delay(3000);
   
+  scoreDisplay.print(10000);      //Schreibt auf Display: - -:- -
   scoreDisplay.setBrightness(0);  //Ausschalten des Displays
   DecreaseBrightness(60);
   
@@ -542,6 +519,8 @@ void EndShow()
 
 void Rotation360(void)
 {
+  //lässte aktuelles Bild einmal um 360° drehen
+  
   int buffer[3];
   
   for(int ANZ_Shift=0; ANZ_Shift<ANZ_LEDs; ANZ_Shift++)
@@ -585,16 +564,15 @@ void Blinking(int ANZ, int ONtime, int OFFtime)
 
 void ShowScore(void)
 {
-  Serial.println("ShowScore");
+  //Auswahl welcher ShowScore-Funktion verwendet werden kann
   if(ScoreTeamBlue <=10 && ScoreTeamYellow <= 10)  { ShowScoreLongSides(); }
   else if((ScoreTeamBlue >10 && ScoreTeamYellow >10) && (ScoreTeamBlue <19 && ScoreTeamYellow <19))  { ShowScoreShortSides(); }
-  LastEvent = 0;
+  
+  LastEvent = 0;    //Dauer seit dem letzten Event wird zurückgesetzt
 }
 
 void ShowScoreShortSides(void)
 {
-  int internalDelay = 100;
-  
   //LEDs stufenweise in benötigtem Bereich von innen nach außen ausschalten
   for(int i=0; i<=9; i++)
   {
@@ -606,7 +584,7 @@ void ShowScoreShortSides(void)
       stripArray[MidpointShortSideYellow-1-i][j] = 0;
     }
     TransmiteToLEDs();
-    delay(internalDelay);
+    delay(internalDelayShowScoreDelay);
   }
   
   //Spielstand Team GELB auf Array schreiben
@@ -653,7 +631,7 @@ void ShowScoreShortSides(void)
       stripArray[MidpointShortSideYellow-1+i][j] = 255;
     }
     TransmiteToLEDs();
-    delay(internalDelay);
+    delay(internalDelayShowScoreDelay);
   }
   return;
 }
@@ -661,8 +639,6 @@ void ShowScoreShortSides(void)
 
 void ShowScoreLongSides(void)
 {
-  int internalDelay = 100;
-  
   //LEDs stufenweise in benötigtem Bereich von innen nach außen ausschalten
   for(int i=0; i<=11; i++)
   {
@@ -674,7 +650,7 @@ void ShowScoreLongSides(void)
       stripArray[MidpointLongSideLeft-1-i][j] = 0;
     }
     TransmiteToLEDs();
-    delay(internalDelay);
+    delay(internalDelayShowScoreDelay);
   }
   //Spielstand Team GELB auf Array schreiben
   for(int i=0; i<ScoreTeamYellow; i++)
@@ -730,13 +706,15 @@ void ShowScoreLongSides(void)
       stripArray[MidpointLongSideLeft-1-1-i][j] = 255;
     }
     TransmiteToLEDs();
-    delay(internalDelay);
+    delay(internalDelayShowScoreDelay);
   }
   return;
 }
 
 //////////////////////////////////////////////////-----Tor-Shows----/////////////////////////////////////////////////////////
-
+/// LongSides2Waves():                                                                       ///
+/// Jeweils Zwei Wellen laufen an den langen Seiten zwei Mal synchron hin und zurück. Die    ///
+/// Farbe entspricht der Torerzielenden Mannschaft.                                          ///
 void LongSides2Waves(boolean Team)
 {
   int TwinArray[LongSide][3];
@@ -745,15 +723,19 @@ void LongSides2Waves(boolean Team)
   int WaveLEDon2[WaveLength];
   boolean WaveUpDown1[WaveLength];
   boolean WaveUpDown2[WaveLength];
+  int NumbTurnsWave = 0;    //Zählt Anstöße am Seiten-Ende der vorderen Wellenfront der 1. Welle
   
+  //Wellen-Arrays werden initialisiert
   Init_WaveArrays(WaveLength, WaveLEDon1, WaveUpDown1, LongSide, true);
   Init_WaveArrays(WaveLength, WaveLEDon2, WaveUpDown2, LongSide, false);
-    
-  int Zaehler = 0;
-  while (Zaehler<6)
+
+  ClearLEDArray();
+  
+  //Wellen-Bewegung
+  while (NumbTurnsWave<4)
   {
-    Wave(Team, LongSide, TwinArray, WaveLength, WaveLEDon1, WaveUpDown1, false, &Zaehler, true);
-    Wave(Team, LongSide, TwinArray, WaveLength, WaveLEDon2, WaveUpDown2, false, &Zaehler, false);
+    Wave(Team, LongSide, TwinArray, WaveLength, WaveLEDon1, WaveUpDown1, false, &NumbTurnsWave, true);
+    Wave(Team, LongSide, TwinArray, WaveLength, WaveLEDon2, WaveUpDown2, false, &NumbTurnsWave, false);
     
     WriteStripArryTwoWaves(LongSide, TwinArray);
     TransmiteToLEDs();
@@ -767,6 +749,8 @@ void LongSides2Waves(boolean Team)
 
 void WriteStripArryTwoWaves(int Limit_Array, int ARRAY[][3])
 {
+  //Limit_Array wird synchron auf beide lange Seiten kopiert
+  
   for(int i=0; i<Limit_Array; i++)
   {
     for(int j=0; j<3; j++)
@@ -781,6 +765,7 @@ void WriteStripArryTwoWaves(int Limit_Array, int ARRAY[][3])
 
 void Init_WaveArrays(int WaveLength, int LEDon[], boolean UpDown[], int Limit, boolean Direction)
 {
+  //Direction: gibt die Bewegungsrichtung zu Beginn an
   for(int i=0; i<WaveLength; i++)
   {
     if(Direction == true)  { LEDon[i] = -i; }
@@ -790,9 +775,8 @@ void Init_WaveArrays(int WaveLength, int LEDon[], boolean UpDown[], int Limit, b
   return;
 }
 
-void Wave(boolean Team, int ArrayLength, int ARRAY[][3], int WaveLength, int LEDon[], boolean UpDown[], boolean PassLimit, int *Zaehler, boolean EnableCounting)
+void Wave(boolean Team, int ArrayLength, int ARRAY[][3], int WaveLength, int LEDon[], boolean UpDown[], boolean PassLimit, int *NumbTurnsWave, boolean EnableCounting)
 {
-  
   //5 Einzel-LEDs einer Welle neu setzen
   for(int i=0; i<WaveLength; i++)
   {
@@ -828,14 +812,17 @@ void Wave(boolean Team, int ArrayLength, int ARRAY[][3], int WaveLength, int LED
     if (PassLimit == false && LEDon[i] == 0) {UpDown[i] = true; }
     else if (PassLimit == false && LEDon[i] == (ArrayLength-1)) {UpDown[i] = false; }
     
-    //Zaehler +1 wenn Zählen freigegeben ist und Welle eine Strecke durchlaufen hat
-    if (EnableCounting == true && i == 0 && (LEDon[0]==0 || LEDon[0]==ArrayLength-1)) { *Zaehler=*Zaehler+1; Serial.println("Count!");}
+    //NumbTurnsWave +1 wenn Zählen freigegeben ist und Welle eine Strecke durchlaufen hat
+    if (EnableCounting == true && i == 0 && (LEDon[0]==0 || LEDon[0]==ArrayLength-1)) { *NumbTurnsWave=*NumbTurnsWave+1; }
   }  //Ende For-Schleife/LEDs der Wellen neugesetzt
   return;
 }
 
 //-------------------------------------------------------------------------------------------------------------------//
-
+/// BlinkingAndTwoWaves():                                                                   ///
+/// Jeweils Zwei Wellen laufen an den langen Seiten zwei Mal hin und zurück. Zusätzlich      ///
+/// blinkt die kurze Querseite hinter dem Tor, in das der Ball geschossen wird, in der Farbe ///
+/// der Mannschaft, die das Tor erzielt.                                                     ///
 void BlinkingAndTwoWaves(boolean Team)
 {
   //Allgemeine Variabeln
@@ -844,24 +831,27 @@ void BlinkingAndTwoWaves(boolean Team)
   int InternalCounterShortSide = 0;
   boolean WriteStripArray = false;
   //Variabeln für lange Seiten
-  int TwinArray[LongSide][3];
+  int TwinArray[LongSide][3];    //Arbeits-Array: hier wird darauf gearbeitet und dann auf strip_Array kopiert
   int WaveLength = 5;
-  int WaveLEDon1[WaveLength];
+  int WaveLEDon1[WaveLength];    //merkt sich LED-Nummer auf dem Array für die 5 Wellen-LEDs
   int WaveLEDon2[WaveLength];
-  boolean WaveUpDown1[WaveLength];
-  boolean WaveUpDown2[WaveLength];
-  int NumbTurnsWave = 0;
+  boolean WaveUpDown1[WaveLength];    //gibt an in welche Richtung sich die einzelnen LEDs bewegen,
+  boolean WaveUpDown2[WaveLength];    //wichtig bei Anstößen an Seiten-Ende
+  int NumbTurnsWave = 0;    //Zählt Anstöße am Seiten-Ende der vorderen Wellenfront der 1. Welle
   //Variabeln für kurze Seite
   int ShortSideArray[ShortSide][3];
   boolean OnOff = true;
   
-  
+  //Wellen-Arrays werden initialisiert
   Init_WaveArrays(WaveLength, WaveLEDon1, WaveUpDown1, LongSide, true);
   Init_WaveArrays(WaveLength, WaveLEDon2, WaveUpDown2, LongSide, false);
   
   ClearLEDArray();
+  
+  //Wellen-Bewegung
   while (NumbTurnsWave < 4)
   {
+    //Alle 50ms bewegt sich Welle weiter
     if(InternalCounterLongSides*InternalDelay >= 50)
     {
       Wave(Team, LongSide, TwinArray, WaveLength, WaveLEDon1, WaveUpDown1, false, &NumbTurnsWave, true);
@@ -872,6 +862,7 @@ void BlinkingAndTwoWaves(boolean Team)
       WriteStripArray = true;
     }
     
+    //Alle 500ms schaltet kurze Seite um -> Blinken mit 2Hz
     if(InternalCounterShortSide*InternalDelay >= 500)
     {
       Blink(Team, ShortSide, ShortSideArray, &OnOff);
@@ -879,6 +870,7 @@ void BlinkingAndTwoWaves(boolean Team)
       WriteStripArray = true;
     }
     
+    //Wenn etwas verändert wurde: LED-Band wird beschriebenund die langen Seiten gelöscht
     if(WriteStripArray == true)
     {
       TransmiteToLEDs();
@@ -896,7 +888,10 @@ void BlinkingAndTwoWaves(boolean Team)
 }
 
 //-------------------------------------------------------------------------------------------------------------------//
-
+/// ShotandBlinking():                                                                       ///
+/// an beiden langen Seiten jeweils eine Welle von dem gegenüberliegenden Ende auf die Seite ///
+/// auf der das Tor erzielt wird zu. Erreicht die, Wellenfront das Ende fängt die Querseite  ///
+/// an drei Mal zu blinken. Die Farbe entspricht der torerzielenden Mannschaft.              ///
 void ShotandBlinking(boolean Team)
 {
   //Allgemeine Variabeln
@@ -915,12 +910,15 @@ void ShotandBlinking(boolean Team)
   boolean OnOff = true;
   int NumbBlinking = 0;
   
-  
+  //Wellen-Array wird initialisiert
   Init_WaveArrays(WaveLength, WaveLEDon, WaveUpDown, LongSide, Team);
   
   ClearLEDArray();
+  
+  //Wellen-Bewegung
   while (NumbTurnsWave < 1 || NumbBlinking < 6)
   {
+    //Alle 50ms bewegt sich Welle weiter
     if(InternalCounterLongSides*InternalDelay >= 50)
     {
       Wave(Team, LongSide, TwinArray, WaveLength, WaveLEDon, WaveUpDown, true, &NumbTurnsWave, true);
@@ -930,6 +928,7 @@ void ShotandBlinking(boolean Team)
       WriteStripArray = true;
     }
     
+    //Alle 200ms schaltet kurze Seite, sobald Wellenfront Seiten-Ende erreicht hat
     if(NumbTurnsWave == 1 && InternalCounterShortSide*InternalDelay >= 200)
     {
       Blink(Team, ShortSide, ShortSideArray, &OnOff);
@@ -938,6 +937,7 @@ void ShotandBlinking(boolean Team)
       WriteStripArray = true;
     }
     
+    //Wenn etwas verändert wurde: LED-Band wird beschriebenund die langen Seiten gelöscht
     if(WriteStripArray == true)
     {
       TransmiteToLEDs();
@@ -998,7 +998,9 @@ void WriteYellowShortSideArray(int Limit_Array, int ARRAY[][3])
 }
 
 //-------------------------------------------------------------------------------------------------------------------//
-
+/// EveryOther():                                                                            ///
+/// klassischer Lichteffekt zum Beispiel auf Jahrmärkten, bei dem jeweilsdie benachbarten    ///
+/// LEDs sich an bzw. ausschalten. Farbe entspricht der der Torerzielenden Mannschaft.       ///
 void EveryOther(boolean Team)
 {
   boolean OnOff = false;
