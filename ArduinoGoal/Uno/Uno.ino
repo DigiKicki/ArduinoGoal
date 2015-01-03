@@ -8,6 +8,7 @@
 #include <analogComp.h>
 
 #include <SerialCommunication.h>
+#include <GoalAnimation7Segment.h>
 
 // ANALOG INTERRUPT CONSTANTS
 #define DIODE_PIN 0
@@ -116,7 +117,8 @@ void loop(){
     Serial.write(getMinute(goalTime - startTime));
     Serial.write(getSecond(goalTime - startTime));
     goal1 = goal2 = false;
-    goalDisplayBlink();
+    displayBlinkGOAL(clockDisplay);
+    goalBlink = true;
   }
   
   // finish running game after 10 minutes, send signal and play sound
@@ -226,15 +228,4 @@ byte getSecond(long time) {
 
 byte getMinute(long time) {
   return byte(time/(SECOND*MINUTE));
-}
-
-void goalDisplayBlink() {
-  clockDisplay.writeDigitNum(POS_LEFT_DIGIT_1, LETTER_G);
-  clockDisplay.writeDigitNum(POS_LEFT_DIGIT_2, LETTER_O);
-  clockDisplay.writeDigitRaw(POS_RIGHT_DIGIT_1, LETTER_A);
-  clockDisplay.writeDigitRaw(POS_RIGHT_DIGIT_2, LETTER_L);
-  clockDisplay.drawColon(false);
-  clockDisplay.blinkRate(1);
-  clockDisplay.writeDisplay();
-  goalBlink = true;
 }
