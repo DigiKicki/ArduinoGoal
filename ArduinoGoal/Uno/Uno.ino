@@ -30,10 +30,6 @@ WaveHC wave;
 boolean wavePlaying;
 
 // 7SEG CLOCK DISPLAY CONSTANTS
-#define POS_LEFT_DIGIT_1 0
-#define POS_LEFT_DIGIT_2 1
-#define POS_RIGHT_DIGIT_1 3
-#define POS_RIGHT_DIGIT_2 4
 #define SECOND 1000.0
 #define MINUTE 60.0
 #define TEN 10.0
@@ -109,7 +105,7 @@ void loop(){
       Serial.write(SERIAL_GOAL_UNO);
       playSound("tor1.wav");
       analogComparator.enableInterrupt(ISR_goalDetected, FALLING);
-      enableAgain = true;
+      //enableAgain = true;
     } else {
       Serial.write(SERIAL_GOAL_ANSWER);
       playSound("tor2.wav");
@@ -130,14 +126,16 @@ void loop(){
   }
   
   if (goalBlink && gameStarted && currentTime - goalTime >= GOAL_BLINK_DURATION) {
+	clockDisplay.blinkRate(0);
+	clockDisplay.writeDisplay();
     goalBlink = false;
   }
   
   // enable interrupt
-  if (enableAgain && currentTime - goalTime >= INTERRUPT_ENABLE_DURATION) {
-    analogComparator.enableInterrupt(ISR_goalDetected, FALLING);
-    enableAgain = false;
-  }
+  //if (enableAgain && currentTime - goalTime >= INTERRUPT_ENABLE_DURATION) {
+    //analogComparator.enableInterrupt(ISR_goalDetected, FALLING);
+    //enableAgain = false;
+  //}
   
   // stop playing sound
   if (wavePlaying && currentTime - goalTime >= SOUND_PLAY_TIME) {
@@ -184,7 +182,6 @@ void displayTime(long time) {
   clockDisplay.writeDigitNum(POS_RIGHT_DIGIT_1, digit1);
   clockDisplay.writeDigitNum(POS_RIGHT_DIGIT_2, digit2);
   clockDisplay.drawColon(true);
-  clockDisplay.blinkRate(0);
   clockDisplay.writeDisplay();
 }
 
