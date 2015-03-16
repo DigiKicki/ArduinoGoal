@@ -65,7 +65,8 @@ void setup() {
   analogComparator.enableInterrupt(ISR_goalDetected, FALLING);
   
   // pwm for reference voltage
-  analogWrite(3, 22);
+  long diodeValue = analogRead(DIODE_PIN);
+  analogWrite(PWM_PIN_REF_V, map(diodeValue, 0, 1023, 0, 255));
 }
 
 void loop(){
