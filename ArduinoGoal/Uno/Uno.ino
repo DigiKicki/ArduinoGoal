@@ -33,6 +33,7 @@ boolean wavePlaying;
 #define SECOND 1000.0
 #define MINUTE 60.0
 #define TEN 10.0
+#define TIME_FIX_VALUE 900
 // 7Seg clock display variables
 Adafruit_7segment clockDisplay = Adafruit_7segment();
 long playTime;
@@ -118,7 +119,7 @@ void loop(){
   }
   
   // finish running game after 10 minutes, send signal and play sound
-  if (gameStarted && currentTime - startTime > SECOND * MINUTE * TEN + 900) { // 900 millis offset to reach 10 minutes
+  if (gameStarted && currentTime - startTime > SECOND * MINUTE * TEN + TIME_FIX_VALUE) {
     Serial.write(SERIAL_TIME_OVER);
     gameStarted = false;
     goalTime = currentTime;
