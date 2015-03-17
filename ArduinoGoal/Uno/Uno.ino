@@ -13,7 +13,7 @@
 // ANALOG INTERRUPT CONSTANTS
 #define DIODE_PIN 0
 #define PWM_PIN_REF_V 3
-#define INTERRUPT_ENABLE_DURATION 3000
+#define INTERRUPT_ENABLE_DURATION 1500
 // analog interrupt variables
 volatile boolean goal1;
 boolean enableAgain;
@@ -60,13 +60,13 @@ void setup() {
   // SETUP SD CARD
   setupWaveSDCard();
   
+  // get pwm value for reference voltage
+  long diodeValue = analogRead(DIODE_PIN);
+  analogWrite(PWM_PIN_REF_V, map(diodeValue, 0, 1023, 0, 255));
+  
   // SETUP ANALOG INTERRUPT
   analogComparator.setOn(AIN0, DIODE_PIN);
   analogComparator.enableInterrupt(ISR_goalDetected, FALLING);
-  
-  // pwm for reference voltage
-  long diodeValue = analogRead(DIODE_PIN);
-  analogWrite(PWM_PIN_REF_V, map(diodeValue, 0, 1023, 0, 255));
 }
 
 void loop(){
@@ -105,8 +105,7 @@ void loop(){
     if (goal1) {
       Serial.write(SERIAL_GOAL_UNO);
       playSound("tor1.wav");
-      analogComparator.enableInterrupt(ISR_goalDetected, FALLING);
-      //enableAgain = true;
+      enableAgain = true;
     } else {
       Serial.write(SERIAL_GOAL_ANSWER);
       playSound("tor2.wav");
@@ -133,10 +132,10 @@ void loop(){
   }
   
   // enable interrupt
-  //if (enableAgain && currentTime - goalTime >= INTERRUPT_ENABLE_DURATION) {
-    //analogComparator.enableInterrupt(ISR_goalDetected, FALLING);
-    //enableAgain = false;
-  //}
+  if (enableAgain && currentTime - goalTime >= INTERRUPT_ENABLE_DURATION) {
+    analogComparator.enableInterrupt(ISR_goalDetected, FALLING);
+    enableAgain = false;
+  }
   
   // stop playing sound
   if (wavePlaying && currentTime - goalTime >= SOUND_PLAY_TIME) {
