@@ -10,6 +10,8 @@
 #include <SerialCommunication.h>
 #include <GoalAnimation7Segment.h>
 
+#include <PinChangeInt.h>
+
 // ANALOG INTERRUPT CONSTANTS
 #define DIODE_PIN 0
 #define PWM_PIN_REF_V 3
@@ -44,12 +46,16 @@ boolean goalBlink;
 byte income;
 boolean goal2;
 
+// GAME CONSTANTS
+#define START_PIN 8
+#define RESET_TIMEOUT 5000
 // game variables
 boolean startGame;
-boolean resetGame;
 boolean gameStarted;
 long currentTime;
 long goalTime;
+long startTriggerTime;
+volatile boolean startTrigger;
 
 void setup() {
   Serial.begin(9600);
@@ -68,6 +74,11 @@ void setup() {
   // SETUP ANALOG INTERRUPT
   analogComparator.setOn(AIN0, DIODE_PIN);
   analogComparator.enableInterrupt(ISR_goalDetected, FALLING);
+  
+  // SETUP START INTERRUPT
+  pinMode(START_PIN, INPUT_PULLUP);
+  PCintPort::attachInterrupt(START_PIN, ISR_startTrigger_pressed, FALLING);
+  PCintPort::attachInterrupt(START_PIN, ISR_startTrigger_released, RISING);
 }
 
 void loop(){
@@ -76,10 +87,16 @@ void loop(){
     currentTime = millis();
   }
   
-  // reset a running game
-  if (resetGame) {
-    gameStarted = resetGame = false;
-    startGame = true;
+  if (startTrigger) {
+    if (!gameStarted) {
+      startGame = true;
+      Serial.write(SERIAL_TIME_START);
+    } else if (currentTime - startTriggerTime > RESET_TIMEOUT) { // reset a running game
+      gameStarted = false;
+      startGame = true;
+      startTriggerTime = currentTime;
+      Serial.write(SERIAL_TIME_RESET);
+    }
   }
 
   // start a new game
@@ -151,14 +168,14 @@ void serialEvent() {
     case SERIAL_GOAL_MEGA:
     // goal from other team
     goal2 = true;
-    case SERIAL_TIME_START:
+    /*case SERIAL_TIME_START:
     // start game
     if (!gameStarted) {
       startGame = true;
     }
     case SERIAL_TIME_RESET:
     // reset game
-    resetGame = true;
+    resetGame = true;*/
   }
 }
 
@@ -226,4 +243,15 @@ byte getSecond(long time) {
 
 byte getMinute(long time) {
   return byte(time/(SECOND*MINUTE));
+}
+
+// interrupt service routine for start trigger
+void ISR_startTrigger_released() {
+  startTrigger = false;
+}
+
+// interrupt service routine for start trigger
+void ISR_startTrigger_pressed() {
+  startTrigger = true;
+  startTriggerTime = millis();
 }
