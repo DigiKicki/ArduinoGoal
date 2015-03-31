@@ -1,3 +1,4 @@
+
 //////////////////////////////////////////////////////////////////////////////////
 /// Dateiname: Mega.ino                                                        ///
 /// Stand: 30.12.2014                                                          ///
@@ -13,6 +14,7 @@
 #include <Wire.h>
 #include <analogComp.h>
 #include <SerialCommunication.h>
+#include <GoalAnimation7Segment.h>
 
 /////////////////////////////////////////////////////---CONSTANTS---////////////////////////////////////////////////////////
 
@@ -20,30 +22,22 @@
 #define LED_STRIP_PIN 4
 #define LongSide 33
 #define ShortSide 19
-#define ANZ_LEDs 104
+const int ANZ_LEDs = 2*(LongSide+ShortSide);
 #define MidpointLongSideRight 17
 #define MidpointLongSideLeft 69
 #define MidpointShortSideBlue 43
 #define MidpointShortSideYellow 95
 #define internalDelayShowScoreDelay 100
+#define random_Limit 3
   
   // CONSTANTS FOR 7SEG DISPLAY
-#define LETTER_G 6
-#define LETTER_O 0
-#define LETTER_A 0x77
-#define LETTER_L 0x38
-#define POS_LEFT_DIGIT_1 0
-#define POS_LEFT_DIGIT_2 1
-#define POS_RIGHT_DIGIT_1 3
-#define POS_RIGHT_DIGIT_2 4
-#define GOAL_BLINK_DURATION 3000
 #define GOAL_ANIM_DELAY 500
 #define GOAL_ANIM_DURATION 1500
 
 // CONSTANTS FOR ANALOG INTERRUPT
 #define DIODE_PIN 0
 #define GOAL_TIME_THRESHOLD 3000
-#define PWM_PIN_REF_V 6
+#define PWM_PIN_REF_V 5
 #define REFERENCE_VALUE 14
 
 // CONSTANTS FOR BUTTONS
@@ -66,10 +60,8 @@
   byte GoalTimeSeconds;
   
   //  VARIABLES FOR LED-STRIP  
-  Adafruit_NeoPixel STRIP = Adafruit_NeoPixel(2*(LongSide+ShortSide), LED_STRIP_PIN, NEO_GRB + NEO_KHZ800);
+  Adafruit_NeoPixel STRIP = Adafruit_NeoPixel(ANZ_LEDs, LED_STRIP_PIN, NEO_GRB + NEO_KHZ800);
   int stripArray[ANZ_LEDs][3];
-  int TestCounter = 0;
-  int GoalShow = 0;
   int LastEvent = 0;
   volatile boolean SHOWSCORE = false;
   
@@ -86,7 +78,6 @@
   //  VARIABLES FOR ANALOG INTERRUPT
   volatile boolean goal_Yellow;
   volatile boolean goal_Blue;
-  volatile boolean CountDisabledGoalDetection = false;
   int DetectionCounter = 0;
   
   //  VARIABLES FOR BUTTONS
@@ -115,7 +106,7 @@ void setup()
   STRIP.show();     //Alle LEDs sind sicher ausgeschaltet
   
   // SETUP ANALOG INTERRUPT
-  analogComparator.setOn(AIN0, DIODE_PIN);
+  analogComparator.setOn(6, DIODE_PIN);
   analogComparator.enableInterrupt(ISR_goalDetected, FALLING);
   analogWrite(PWM_PIN_REF_V, REFERENCE_VALUE);    //PWM-Signal für die Referenzspannung
   
@@ -133,6 +124,11 @@ void setup()
   interrupts();
   
   StartShow();
+  /*for(int i=0; i<ANZ_LEDs; i++)
+  {
+    STRIP.setPixelColor(i, 255, 255, 255);
+  }
+  STRIP.show();*/
   startMatch = true;     //Spiel wird automatisch gestartet
 }
 
@@ -141,18 +137,19 @@ void setup()
 ISR(TIMER1_COMPA_vect)
 {
   //Tor-Erkennung freischalten
-  if(CountDisabledGoalDetection = true)
+  if(goal_Blue == true)
   {
     DetectionCounter++;
     if(DetectionCounter == 3)
     {
       analogComparator.enableInterrupt(ISR_goalDetected, FALLING);
+      goal_Blue = false;
     }
   }
   
   //Zeit seit letztem Ereignis zählen, ggf. ShowScore freischalten
   if(activeMatch == true)  {LastEvent++; }
-  if(LastEvent==120 && activeMatch==true && ScoreTeamYellow > 0 && ScoreTeamBlue > 0)      //alle 3 Minuten erscheint Spielstands-Effekt WENN mindestens 1 Tor erzielt wurde
+  if(LastEvent==120 && activeMatch==true && ScoreTeamYellow > 0 && ScoreTeamBlue > 0)      //alle 2 Minuten erscheint Spielstands-Effekt WENN mindestens 1 Tor erzielt wurde
   {
     SHOWSCORE = true;
   }
@@ -163,7 +160,7 @@ ISR(TIMER1_COMPA_vect)
 void loop()
 {
   //Tor-Abfrage über Boolean-Variabeln
-  if(goal_Yellow)  { GOAL(true); }
+  if(goal_Yellow)  { goal_Yellow=false; GOAL(true); }
   if(goal_Blue)    { GOAL(false); }
   
   //Abfrage ob Spielstand korregiert wurde
@@ -179,7 +176,7 @@ void loop()
   if(restartMatch)  { restartMatch = false; MatchStart(true); }
   
   //Abfrage ob Spielende-Kommando über Serielle Kom. eingetroffen ist
-  if(stopMatch)  { MatchEnd(); }
+  if(stopMatch)  { stopMatch = false; MatchEnd(); }
   
   //Abfrage ob 2 Minuten seit dem letzten Event vergangen sind und der Spielstand mit LEDs visualisiert werden soll
   if(SHOWSCORE)
@@ -317,12 +314,9 @@ void GOAL(boolean Team)
   DecreaseBrightness(30);      //Helligkeit wird reduziert umd Tor-Show starten zu können
   
   WriteScoreOnDisplay(Team);   //Digiale Anzeige wird aktualisiert
-  
-  //Zufallszahl generieren zu Auswahl des Torshow-Effekts
-  GoalShow = RandomGoalShow();
-  
+    
   //Torshow-Effekt  
-  switch(GoalShow)    //Aufruf der Tor-Show
+  switch(random(random_Limit))    //Aufruf der Tor-Show
   {
     case 0: LongSides2Waves(Team); break;
     case 1: BlinkingAndTwoWaves(Team); break;
@@ -337,11 +331,6 @@ void GOAL(boolean Team)
   LastEvent = 0;
 }
 
-int RandomGoalShow(void)
-{
-  int Limit = 3;
-  return(random(Limit));
-}
 
 /////////////////////////////////////////////ARRAY-FUNCTIONS/////////////////////////////////////////////////
 void ClearLEDArray(void)
@@ -445,7 +434,7 @@ void StartShow()
   {
     for(int j=0; j<3; j++)
     {
-      if( i<=MidpointLongSideRight || i>MidpointLongSideLeft)  { stripArray[i][j] = ColorTeamYellow[0][j]; }
+      if( i<=MidpointLongSideRight-1 || i>MidpointLongSideLeft-1)  { stripArray[i][j] = ColorTeamYellow[0][j]; }
       else  { stripArray[i][j] = ColorTeamBlue[0][j]; }
     }
   }
@@ -466,37 +455,35 @@ void MatchStart(boolean RESTART)
   {
     DecreaseBrightness(60);
     scoreDisplay.setBrightness(0);
-    ScoreTeamYellow = 0;
-    ScoreTeamBlue = 0;
   }
 
+  ScoreTeamYellow = 0;
+  ScoreTeamBlue = 0;
+  
   DecreaseBrightness(30);
   setArrayColor(255, 255, 255);    //Array auf Weis setzen
   scoreDisplay.setBrightness(15);  //Schaltet Display ein
   WriteScoreOnDisplay(true);
   WriteScoreOnDisplay(false);
   IncreaseBrightness(30);
-  return;
 }
 
 void MatchEnd()
 {
-  activeMatch == false;
+  activeMatch = false;
   EndShow();
   return;
 }
 
 void EndShow()
 {
-  stopMatch = false;
-  
   //Abschluss-Show
   scoreDisplay.blinkRate(1);      //Display blinkt mit Endstand
   DecreaseBrightness(30);
   
   //LEDs in Sieger-Farbe einfärben, bei Unentschieden: Halb-Halb
   if(ScoreTeamYellow > ScoreTeamBlue)  { setArrayColor(ColorTeamYellow[0][0], ColorTeamYellow[0][1], ColorTeamYellow[0][2]); }
-  else if(ScoreTeamYellow > ScoreTeamBlue)  { setArrayColor(ColorTeamBlue[0][0], ColorTeamBlue[0][1], ColorTeamBlue[0][2]); }
+  else if(ScoreTeamYellow < ScoreTeamBlue)  { setArrayColor(ColorTeamBlue[0][0], ColorTeamBlue[0][1], ColorTeamBlue[0][2]); }
   else if(ScoreTeamYellow == ScoreTeamBlue)  { setArrayColorHalfHalf(); }
   
   IncreaseBrightness(30);
@@ -743,8 +730,6 @@ void LongSides2Waves(boolean Team)
   
     delay(50);
   }  //Ende While-Schleife/Ende Torshow-Effekt
-  
-  return;
 }
 
 void WriteStripArryTwoWaves(int Limit_Array, int ARRAY[][3])
@@ -815,7 +800,6 @@ void Wave(boolean Team, int ArrayLength, int ARRAY[][3], int WaveLength, int LED
     //NumbTurnsWave +1 wenn Zählen freigegeben ist und Welle eine Strecke durchlaufen hat
     if (EnableCounting == true && i == 0 && (LEDon[0]==0 || LEDon[0]==ArrayLength-1)) { *NumbTurnsWave=*NumbTurnsWave+1; }
   }  //Ende For-Schleife/LEDs der Wellen neugesetzt
-  return;
 }
 
 //-------------------------------------------------------------------------------------------------------------------//
