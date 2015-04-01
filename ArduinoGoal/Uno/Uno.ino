@@ -89,13 +89,13 @@ void loop(){
   
   if (startTrigger) {
     if (!gameStarted) {
+      Serial.write(SERIAL_GAME_START);
       startGame = true;
-      Serial.write(SERIAL_TIME_START);
     } else if (currentTime - startTriggerTime > RESET_TIMEOUT) { // reset a running game
+      Serial.write(SERIAL_GAME_RESET);
       gameStarted = false;
       startGame = true;
       startTriggerTime = currentTime;
-      Serial.write(SERIAL_TIME_RESET);
     }
   }
 
