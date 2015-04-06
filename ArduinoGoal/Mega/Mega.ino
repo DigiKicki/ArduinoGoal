@@ -6,8 +6,6 @@
 //////////////////////////////////////////////////////////////////////////////////
 
 /////////////////////////////////////////////////////---LIBRARIES---////////////////////////////////////////////////////////
-#include <PinChangeInt.h>
-#include <PinChangeIntConfig.h>
 #include <Adafruit_NeoPixel.h>
 #include <Adafruit_LEDBackpack.h>
 #include <Adafruit_GFX.h>
@@ -42,9 +40,9 @@ const int ANZ_LEDs = 2*(LongSide+ShortSide);
 
 // CONSTANTS FOR BUTTONS
 // Vorbereitung für Bedienpanel (6. Semester)
-#define START_BUTTON_PIN 8
-#define HOLD_TIME_THRESHOLD 3000
-#define CONTACT_CHATTER_TIME 10
+//#define START_BUTTON_PIN 8
+//#define HOLD_TIME_THRESHOLD 3000
+#define CONTACT_CHATTER_TIME 1000
 
 /////////////////////////////////////////////////////---VARIABLES---//////////////////////////////////////////////////////// 
   
@@ -81,8 +79,12 @@ const int ANZ_LEDs = 2*(LongSide+ShortSide);
   int DetectionCounter = 0;
   
   //  VARIABLES FOR BUTTONS
-  long Start_HoldTime = 0;
+  //long Start_HoldTime = 0;
   volatile boolean ScoreCorrected = false;
+  volatile unsigned long FirstContactTimeYellowIncrease = 0;
+  volatile unsigned long FirstContactTimeYellowDecrease = 0;
+  volatile unsigned long FirstContactTimeBlueIncrease = 0;
+  volatile unsigned long FirstContactTimeBlueDecrease = 0;
   
   
 /////////////////////////////////////////////////////---SETUP---////////////////////////////////////////////////////////  
@@ -91,7 +93,7 @@ void setup()
 {
   //  SETUP SERIAL COMMUNICATION
   Serial.begin(9600);    // startet serielle Konsole
-  Serial1.begin(9600);   // startet serielle Kommunikation S1:  Pin19 (RX, Empfänger), Pin18 (TX, Sender)
+  Serial2.begin(9600);   // startet serielle Kommunikation S1:  Pin19 (RX, Empfänger), Pin18 (TX, Sender)
   
   //  SETUP 7SEG DISPLAY
   scoreDisplay.begin(0x70);
@@ -110,6 +112,17 @@ void setup()
   analogComparator.enableInterrupt(ISR_goalDetected, FALLING);
   analogWrite(PWM_PIN_REF_V, REFERENCE_VALUE);    //PWM-Signal für die Referenzspannung
   
+  // SETUP BUTTONS //
+  pinMode(2, INPUT_PULLUP);
+  attachInterrupt(0, ISR_scoreYellowIncrease, FALLING);    // Gelb+1 PIN: 2
+  pinMode(3, INPUT_PULLUP);
+  attachInterrupt(1, ISR_scoreYellowDecrease, FALLING);    // Gelb-1 PIN: 3
+  pinMode(19, INPUT_PULLUP);
+  attachInterrupt(4, ISR_scoreBlueIncrease, FALLING);    // Blau+1 PIN: 19
+  pinMode(18, INPUT_PULLUP);
+  attachInterrupt(5, ISR_scoreBlueDecrease, FALLING);    // Blau-1 PIN: 18
+  
+  
   // SETUP TIMERS
   noInterrupts();           // disable all interrupts
   //Timer 1 for ShowScore()
@@ -123,13 +136,14 @@ void setup()
   TIMSK1 |= _BV(OCIE1A); // enable timer compare interrupt
   interrupts();
   
-  StartShow();
+  //StartShow();
   /*for(int i=0; i<ANZ_LEDs; i++)
   {
     STRIP.setPixelColor(i, 255, 255, 255);
   }
   STRIP.show();*/
   startMatch = true;     //Spiel wird automatisch gestartet
+  Serial.println("MatchStart");
 }
 
 /////////////////////////////////////////////////////---ISR---////////////////////////////////////////////////////////
@@ -171,7 +185,7 @@ void loop()
     ScoreCorrected = false;
   }
   
-  //Abfrage des Start-Buttons
+  //Abfrage der Start-Merker
   if(startMatch)  { startMatch = false; MatchStart(false); }
   if(restartMatch)  { restartMatch = false; MatchStart(true); }
   
@@ -188,7 +202,7 @@ void loop()
 
 /////////////////////////////////////////////////////Serial-Kommunikation////////////////////////////////////////////////////////
 
-void serialEvent1()
+void serialEvent2()
 {
   incomingByte = Serial1.read();    //erstes Byte wird aus Buffer ausgelesen mit anschließender Fallunterscheidung
       
@@ -204,7 +218,7 @@ void serialEvent1()
 
 void SendSerialByte(byte sendByte)
 {
-  Serial1.print(sendByte);
+  Serial2.print(sendByte);
   return;
 }
 
@@ -220,42 +234,56 @@ void ISR_goalDetected() {
 
 void ISR_scoreYellowIncrease()
 {
-  ScoreCorrected = true;
-  ScoreTeamYellow++;
-  //Schalterprellen blockieren:
-  //Interrupt blockiert weiteren Int.->delay(max. Schalterprellzeit)
-  delay(CONTACT_CHATTER_TIME);
+  //Schalterprellen blockieren
+  if( activeMatch && (millis()-FirstContactTimeYellowIncrease) > CONTACT_CHATTER_TIME)
+  {
+    ScoreCorrected = true;
+    ScoreTeamYellow++;
+    Serial.println("Gelb+");
+    
+    FirstContactTimeYellowIncrease = millis();
+  }
 }
 
 void ISR_scoreYellowDecrease()
 {
-  ScoreCorrected = true;
-  if(ScoreTeamYellow > 0)  { ScoreTeamYellow--; }
-  //Schalterprellen blockieren:
-  //Interrupt blockiert weiteren Int.->delay(max. Schalterprellzeit)
-  delay(CONTACT_CHATTER_TIME);
+  //Schalterprellen blockieren
+  if ( activeMatch && (millis()-FirstContactTimeYellowDecrease) > CONTACT_CHATTER_TIME)
+  {
+    ScoreCorrected = true;
+    if(ScoreTeamYellow > 0)  { ScoreTeamYellow--; }
+    Serial.println("Gelb-");
+    
+    FirstContactTimeYellowDecrease = millis();
+  }
 }
 
 void ISR_scoreBlueIncrease()
 {
-  ScoreCorrected = true;
-  ScoreTeamBlue++;
-  //Schalterprellen blockieren:
-  //Interrupt blockiert weiteren Int.->delay(max. Schalterprellzeit)
-  delay(CONTACT_CHATTER_TIME);
+  if ( activeMatch && (millis()-FirstContactTimeBlueIncrease) > CONTACT_CHATTER_TIME)
+  {
+    ScoreCorrected = true;
+    ScoreTeamBlue++;
+    Serial.println("Blue+");
+    
+    FirstContactTimeBlueIncrease = millis();
+  }
 }
 
 void ISR_scoreBlueDecrease()
 {
-  ScoreCorrected = true;
-  if(ScoreTeamBlue > 0)  { ScoreTeamBlue--; }
-  //Schalterprellen blockieren:
-  //Interrupt blockiert weiteren Int.->delay(max. Schalterprellzeit)
-  delay(CONTACT_CHATTER_TIME);
+  if ( activeMatch && (millis()-FirstContactTimeBlueDecrease) > CONTACT_CHATTER_TIME)
+  {
+    ScoreCorrected = true;
+    if(ScoreTeamBlue > 0)  { ScoreTeamBlue--; }
+    Serial.println("Blue-");
+    
+    FirstContactTimeBlueDecrease = millis();
+  }
 }
 
 
-void ISR_Start_Button(void)
+/*void ISR_Start_Button(void)
 {
   noInterrupts(); 
   
@@ -273,7 +301,7 @@ void ISR_Start_Button(void)
   delay(CONTACT_CHATTER_TIME);    //um Schalterprellen zu blockieren
   interrupts();
   return;
-}
+}*/
 
 /////////////////////////////////////////////////////---7SEG DISPLAY---////////////////////////////////////////////////////////
 
