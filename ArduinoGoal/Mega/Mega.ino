@@ -42,7 +42,7 @@ const int ANZ_LEDs = 2*(LongSide+ShortSide);
 // Vorbereitung für Bedienpanel (6. Semester)
 //#define START_BUTTON_PIN 8
 //#define HOLD_TIME_THRESHOLD 3000
-#define CONTACT_CHATTER_TIME 1000
+#define CONTACT_CHATTER_TIME 2000
 
 /////////////////////////////////////////////////////---VARIABLES---//////////////////////////////////////////////////////// 
   
@@ -94,6 +94,8 @@ void setup()
   //  SETUP SERIAL COMMUNICATION
   Serial.begin(9600);    // startet serielle Konsole
   Serial2.begin(9600);   // startet serielle Kommunikation S1:  Pin19 (RX, Empfänger), Pin18 (TX, Sender)
+  Serial2.write(12);
+  Serial2.print(13);
   
   //  SETUP 7SEG DISPLAY
   scoreDisplay.begin(0x70);
@@ -111,6 +113,9 @@ void setup()
   analogComparator.setOn(6, DIODE_PIN);
   analogComparator.enableInterrupt(ISR_goalDetected, FALLING);
   analogWrite(PWM_PIN_REF_V, REFERENCE_VALUE);    //PWM-Signal für die Referenzspannung
+  
+  // LED FOR TIMER
+  pinMode(13, OUTPUT);
   
   // SETUP BUTTONS //
   pinMode(2, INPUT_PULLUP);
@@ -142,14 +147,15 @@ void setup()
     STRIP.setPixelColor(i, 255, 255, 255);
   }
   STRIP.show();*/
-  startMatch = true;     //Spiel wird automatisch gestartet
-  Serial.println("MatchStart");
+  //startMatch = true;     //Spiel wird automatisch gestartet
+  //Serial.println("MatchStart");
 }
 
 /////////////////////////////////////////////////////---ISR---////////////////////////////////////////////////////////
 
 ISR(TIMER1_COMPA_vect)
 {
+  digitalWrite(13, !digitalRead(13));
   //Tor-Erkennung freischalten
   if(goal_Blue == true)
   {
@@ -186,8 +192,8 @@ void loop()
   }
   
   //Abfrage der Start-Merker
-  if(startMatch)  { startMatch = false; MatchStart(false); }
-  if(restartMatch)  { restartMatch = false; MatchStart(true); }
+  if(startMatch)  { startMatch = false; Serial.println("MatchStart-Methode wird mit Start aufgerufen"); MatchStart(false); }
+  if(restartMatch)  { restartMatch = false; Serial.println("MatchStart-Methode wird mit Restart aufgerufen"); MatchStart(true); }
   
   //Abfrage ob Spielende-Kommando über Serielle Kom. eingetroffen ist
   if(stopMatch)  { stopMatch = false; MatchEnd(); }
@@ -204,13 +210,15 @@ void loop()
 
 void serialEvent2()
 {
-  incomingByte = Serial1.read();    //erstes Byte wird aus Buffer ausgelesen mit anschließender Fallunterscheidung
+  incomingByte = Serial2.read();    //erstes Byte wird aus Buffer ausgelesen mit anschließender Fallunterscheidung
       
   switch(incomingByte)
   {
     case SERIAL_TIME_OVER: activeMatch=false; stopMatch=true; break;
-    case SERIAL_GOAL_UNO: delay(5); GoalTimeMinutes=Serial1.read(); GoalTimeSeconds=Serial1.read(); goal_Yellow=true; break; //------<<Bool-Wert anpassen Teamabhängig
-    case SERIAL_GOAL_ANSWER: delay(5); GoalTimeMinutes=Serial1.read(); GoalTimeSeconds=Serial1.read(); break;
+    case SERIAL_GOAL_UNO: delay(5); Serial.println("Goalbyte angekommen"); GoalTimeMinutes=Serial2.read(); GoalTimeSeconds=Serial2.read(); goal_Yellow=true; break; //------<<Bool-Wert anpassen Teamabhängig
+    case SERIAL_GOAL_ANSWER: delay(5); GoalTimeMinutes=Serial2.read(); GoalTimeSeconds=Serial2.read(); break;
+    case SERIAL_GAME_START: if(!activeMatch && !startMatch) {startMatch=true; Serial.println("Start-Byte angekommen");} break;
+    case SERIAL_GAME_RESET: restartMatch=true; Serial.println("Reset-Byte angekommen"); break;
     default: break;
   }
 }
@@ -218,7 +226,8 @@ void serialEvent2()
 
 void SendSerialByte(byte sendByte)
 {
-  Serial2.print(sendByte);
+  Serial2.write(sendByte);
+  Serial.println("Tor-Byte gesendet");
   return;
 }
 
@@ -227,22 +236,27 @@ void SendSerialByte(byte sendByte)
 void ISR_goalDetected() {
   analogComparator.disableInterrupt();
   goal_Blue = true; //--------------------<<variabel anpassen, teamabhängig
-  SendSerialByte(SERIAL_GOAL_MEGA);
+  //SendSerialByte(SERIAL_GOAL_MEGA);
 }
 
-//-----------------------------------Vorbereitung für Bedienpanel (6. Semester)-----------------------------------------//
+//--------------------------------------Bedienpanel Buttons--------------------------------------------//
 
 void ISR_scoreYellowIncrease()
 {
   //Schalterprellen blockieren
   if( activeMatch && (millis()-FirstContactTimeYellowIncrease) > CONTACT_CHATTER_TIME)
   {
+    /*
     ScoreCorrected = true;
     ScoreTeamYellow++;
-    Serial.println("Gelb+");
+    Serial.println("Gelb+");*/
+    goal_Blue = true; //--------------------<<variabel anpassen, teamabhängig
+    Serial.println("Tor Blau");
+    SendSerialByte(SERIAL_GOAL_MEGA);
     
     FirstContactTimeYellowIncrease = millis();
   }
+  
 }
 
 void ISR_scoreYellowDecrease()
@@ -478,7 +492,7 @@ void StartShow()
 void MatchStart(boolean RESTART)
 {
   activeMatch = true;
-  
+  Serial.println("MatchStart");
   if(RESTART)
   {
     DecreaseBrightness(60);
@@ -508,7 +522,7 @@ void EndShow()
   //Abschluss-Show
   scoreDisplay.blinkRate(1);      //Display blinkt mit Endstand
   DecreaseBrightness(30);
-  
+  Serial.println("Spielende");
   //LEDs in Sieger-Farbe einfärben, bei Unentschieden: Halb-Halb
   if(ScoreTeamYellow > ScoreTeamBlue)  { setArrayColor(ColorTeamYellow[0][0], ColorTeamYellow[0][1], ColorTeamYellow[0][2]); }
   else if(ScoreTeamYellow < ScoreTeamBlue)  { setArrayColor(ColorTeamBlue[0][0], ColorTeamBlue[0][1], ColorTeamBlue[0][2]); }
