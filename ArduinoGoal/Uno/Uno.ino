@@ -16,13 +16,14 @@
 #define DIODE_PIN 0
 #define PWM_PIN_REF_V 3
 #define INTERRUPT_ENABLE_DURATION 1500
+#define DIODE_VOLTAGE_OFFSET 5
 // analog interrupt variables
 volatile boolean goal1;
 boolean reEnableInterrupr;
 
 // WAVE SHIELD CONSTANTS
 #define playSound(name) playSound_P(PSTR(name))
-#define SOUND_PLAY_TIME 10000//36000
+#define SOUND_PLAY_TIME 10000
 // wave shield variables
 SdReader card;
 FatVolume vol;
@@ -57,7 +58,6 @@ long currentTime;
 long goalTime;
 volatile long startTriggerTime;
 volatile long startTriggerTimeEnd;
-//volatile boolean startTrigger;
 
 void setup() {
   Serial.begin(9600);
@@ -70,7 +70,7 @@ void setup() {
   setupWaveSDCard();
   
   // get pwm value for reference voltage
-  long diodeValue = analogRead(DIODE_PIN) - 5;
+  long diodeValue = analogRead(DIODE_PIN) - DIODE_VOLTAGE_OFFSET;
   analogWrite(PWM_PIN_REF_V, map(diodeValue, 0, 1023, 0, 255));
   
   // SETUP ANALOG INTERRUPT
@@ -172,19 +172,6 @@ void serialEvent() {
   if (income == SERIAL_GOAL_MEGA) {
     goal2 = true;
   }
-  /*switch (income) {
-    case SERIAL_GOAL_MEGA:
-    // goal from other team
-    goal2 = true;
-    case SERIAL_TIME_START:
-    // start game
-    if (!gameStarted) {
-      startGame = true;
-    }
-    case SERIAL_TIME_RESET:
-    // reset game
-    resetGame = true;
-  }*/
 }
 
 // init 7Seg clock with '00:00'
@@ -260,6 +247,5 @@ void ISR_startTrigger_released() {
 
 // interrupt service routine for start trigger
 void ISR_startTrigger_pressed() {
-  //startTrigger = true;
   startTriggerTime = millis();
 }
