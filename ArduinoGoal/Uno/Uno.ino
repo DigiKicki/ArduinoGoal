@@ -18,11 +18,11 @@
 #define INTERRUPT_ENABLE_DURATION 1500
 // analog interrupt variables
 volatile boolean goal1;
-boolean enableAgain;
+boolean reEnableInterrupr;
 
 // WAVE SHIELD CONSTANTS
 #define playSound(name) playSound_P(PSTR(name))
-#define SOUND_PLAY_TIME 36000
+#define SOUND_PLAY_TIME 10000//36000
 // wave shield variables
 SdReader card;
 FatVolume vol;
@@ -48,14 +48,16 @@ boolean goal2;
 
 // GAME CONSTANTS
 #define START_PIN 8
-#define RESET_TIMEOUT 5000
+#define RESET_TIMEOUT 3000
+#define RESET_TIMEOUT_MAX 5000
 // game variables
 boolean startGame;
 boolean gameStarted;
 long currentTime;
 long goalTime;
-long startTriggerTime;
-volatile boolean startTrigger;
+volatile long startTriggerTime;
+volatile long startTriggerTimeEnd;
+//volatile boolean startTrigger;
 
 void setup() {
   Serial.begin(9600);
@@ -68,7 +70,7 @@ void setup() {
   setupWaveSDCard();
   
   // get pwm value for reference voltage
-  long diodeValue = analogRead(DIODE_PIN);
+  long diodeValue = analogRead(DIODE_PIN) - 5;
   analogWrite(PWM_PIN_REF_V, map(diodeValue, 0, 1023, 0, 255));
   
   // SETUP ANALOG INTERRUPT
@@ -87,15 +89,18 @@ void loop(){
     currentTime = millis();
   }
   
-  if (startTrigger) {
+  if (startTriggerTime > 0) {
     if (!gameStarted) {
       Serial.write(SERIAL_GAME_START);
       startGame = true;
-    } else if (currentTime - startTriggerTime > RESET_TIMEOUT) { // reset a running game
+      startTriggerTime = 0;
+    } else if (startTriggerTimeEnd - startTriggerTime > RESET_TIMEOUT) { // reset a running game
       Serial.write(SERIAL_GAME_RESET);
       gameStarted = false;
       startGame = true;
-      startTriggerTime = currentTime;
+      startTriggerTimeEnd = startTriggerTime = 0;
+    } else if (currentTime - startTriggerTime > RESET_TIMEOUT_MAX) {
+      startTriggerTimeEnd = startTriggerTime = 0;
     }
   }
 
@@ -123,7 +128,7 @@ void loop(){
     if (goal1) {
       Serial.write(SERIAL_GOAL_UNO);
       playSound("tor1.wav");
-      enableAgain = true;
+      reEnableInterrupr = true;
     } else {
       Serial.write(SERIAL_GOAL_ANSWER);
       playSound("tor2.wav");
@@ -144,15 +149,15 @@ void loop(){
   }
   
   if (goalBlink && gameStarted && currentTime - goalTime >= GOAL_BLINK_DURATION) {
-	clockDisplay.blinkRate(0);
-	clockDisplay.writeDisplay();
+    clockDisplay.blinkRate(0);
+    clockDisplay.writeDisplay();
     goalBlink = false;
   }
   
   // enable interrupt
-  if (enableAgain && currentTime - goalTime >= INTERRUPT_ENABLE_DURATION) {
+  if (reEnableInterrupr && currentTime - goalTime >= INTERRUPT_ENABLE_DURATION) {
     analogComparator.enableInterrupt(ISR_goalDetected, FALLING);
-    enableAgain = false;
+    reEnableInterrupr = false;
   }
   
   // stop playing sound
@@ -164,19 +169,22 @@ void loop(){
 
 void serialEvent() {
   income = Serial.read();
-  switch (income) {
+  if (income == SERIAL_GOAL_MEGA) {
+    goal2 = true;
+  }
+  /*switch (income) {
     case SERIAL_GOAL_MEGA:
     // goal from other team
     goal2 = true;
-    /*case SERIAL_TIME_START:
+    case SERIAL_TIME_START:
     // start game
     if (!gameStarted) {
       startGame = true;
     }
     case SERIAL_TIME_RESET:
     // reset game
-    resetGame = true;*/
-  }
+    resetGame = true;
+  }*/
 }
 
 // init 7Seg clock with '00:00'
@@ -206,14 +214,14 @@ void displayTime(long time) {
 // setup wave shield and sd card
 void setupWaveSDCard() {
   if (!card.init()){
-    Serial.println("failed to init SD Card");
+    //Serial.println("failed to init SD Card");
   }
   card.partialBlockRead(true);
   if (!vol.init(card)){
-    Serial.println("failed to init volume");
+    //Serial.println("failed to init volume");
   }
   if (!root.openRoot(vol)){
-    Serial.println("failed to open root folder");
+    //Serial.println("failed to open root folder");
   }
 }
 
@@ -222,10 +230,10 @@ void playSound_P(const char *name){
   char myname[13];
   strcpy_P(myname, name);
   if (!file.open(root, myname)){
-    Serial.print("failed to open wave file: ");Serial.println(myname);
+    //Serial.print("failed to open wave file: ");Serial.println(myname);
   }
   if (!wave.create(file)){
-    Serial.print("failed to create wave file: ");Serial.println(myname);
+    //Serial.print("failed to create wave file: ");Serial.println(myname);
   }
   wave.play();
   wavePlaying = true;
@@ -247,11 +255,11 @@ byte getMinute(long time) {
 
 // interrupt service routine for start trigger
 void ISR_startTrigger_released() {
-  startTrigger = false;
+  startTriggerTimeEnd = millis();
 }
 
 // interrupt service routine for start trigger
 void ISR_startTrigger_pressed() {
-  startTrigger = true;
+  //startTrigger = true;
   startTriggerTime = millis();
 }
