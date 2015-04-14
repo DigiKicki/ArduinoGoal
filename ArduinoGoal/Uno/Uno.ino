@@ -23,7 +23,7 @@ boolean reEnableInterrupr;
 
 // WAVE SHIELD CONSTANTS
 #define playSound(name) playSound_P(PSTR(name))
-#define SOUND_PLAY_TIME 10000
+#define SOUND_PLAY_TIME 5000
 // wave shield variables
 SdReader card;
 FatVolume vol;
@@ -169,7 +169,7 @@ void loop(){
 
 void serialEvent() {
   income = Serial.read();
-  if (income == SERIAL_GOAL_MEGA) {
+  if (gameStarted && income == SERIAL_GOAL_MEGA) {
     goal2 = true;
   }
 }
