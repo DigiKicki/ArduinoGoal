@@ -23,14 +23,14 @@ boolean reEnableInterrupr;
 
 // WAVE SHIELD CONSTANTS
 #define playSound(name) playSound_P(PSTR(name))
-#define SOUND_PLAY_TIME 5000
+#define SOUND_PLAY_TIME 15000
 // wave shield variables
 SdReader card;
 FatVolume vol;
 FatReader root;
 FatReader file; 
 WaveHC wave;
-boolean wavePlaying;
+//boolean wavePlaying;
 
 // 7SEG CLOCK DISPLAY CONSTANTS
 #define SECOND 1000.0
@@ -85,7 +85,7 @@ void setup() {
 
 void loop(){
   // get current time only during a game
-  if (startGame || gameStarted || wavePlaying) {
+  if (startGame || gameStarted || wave.isplaying) {
     currentTime = millis();
   }
   
@@ -106,6 +106,9 @@ void loop(){
 
   // start a new game
   if (startGame) {
+    if (wave.isplaying) {
+      wave.stop();
+    }
     setupDisplay();
     gameStarted = true;
     startGame = false;
@@ -122,7 +125,7 @@ void loop(){
   // play goal sounds and send goal time
   if (gameStarted && (goal1 || goal2)) {
     goalTime = millis();
-    if (wavePlaying) {
+    if (wave.isplaying) {
       wave.stop();
     }
     if (goal1) {
@@ -161,9 +164,9 @@ void loop(){
   }
   
   // stop playing sound
-  if (wavePlaying && currentTime - goalTime >= SOUND_PLAY_TIME) {
+  if (wave.isplaying && currentTime - goalTime >= SOUND_PLAY_TIME) {
     wave.stop();
-    wavePlaying = false;
+    //wavePlaying = false;
   }
 }
 
@@ -223,7 +226,7 @@ void playSound_P(const char *name){
     //Serial.print("failed to create wave file: ");Serial.println(myname);
   }
   wave.play();
-  wavePlaying = true;
+  //wavePlaying = true;
 }
 
 // interrupt service routine for made goals
