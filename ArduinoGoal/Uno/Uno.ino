@@ -83,12 +83,7 @@ void setup() {
   PCintPort::attachInterrupt(START_PIN, ISR_startTrigger_released, RISING);
 }
 
-void loop(){
-  // get current time only during a game
-  if (startGame || gameStarted || wave.isplaying) {
-    currentTime = millis();
-  }
-  
+void loop(){  
   if (startTriggerTime > 0) {
     if (!gameStarted) {
       Serial.write(SERIAL_GAME_START);
@@ -102,6 +97,11 @@ void loop(){
     } else if (currentTime - startTriggerTime > RESET_TIMEOUT_MAX) {
       startTriggerTimeEnd = startTriggerTime = 0;
     }
+  }
+  
+  // get current time only during a game
+  if (startGame || gameStarted || wave.isplaying) {
+    currentTime = millis();
   }
 
   // start a new game
