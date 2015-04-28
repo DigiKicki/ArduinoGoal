@@ -30,7 +30,6 @@ FatVolume vol;
 FatReader root;
 FatReader file; 
 WaveHC wave;
-//boolean wavePlaying;
 
 // 7SEG CLOCK DISPLAY CONSTANTS
 #define SECOND 1000.0
@@ -106,9 +105,6 @@ void loop(){
 
   // start a new game
   if (startGame) {
-    if (wave.isplaying) {
-      wave.stop();
-    }
     setupDisplay();
     gameStarted = true;
     startGame = false;
@@ -125,9 +121,6 @@ void loop(){
   // play goal sounds and send goal time
   if (gameStarted && (goal1 || goal2)) {
     goalTime = millis();
-    if (wave.isplaying) {
-      wave.stop();
-    }
     if (goal1) {
       Serial.write(SERIAL_GOAL_UNO);
       playSound("tor1.wav");
@@ -166,7 +159,6 @@ void loop(){
   // stop playing sound
   if (wave.isplaying && currentTime - goalTime >= SOUND_PLAY_TIME) {
     wave.stop();
-    //wavePlaying = false;
   }
 }
 
@@ -217,6 +209,9 @@ void setupWaveSDCard() {
 
 // play wave file by name
 void playSound_P(const char *name){
+  if (wave.isplaying) {
+    wave.stop();
+  }
   char myname[13];
   strcpy_P(myname, name);
   if (!file.open(root, myname)){
@@ -226,7 +221,6 @@ void playSound_P(const char *name){
     //Serial.print("failed to create wave file: ");Serial.println(myname);
   }
   wave.play();
-  //wavePlaying = true;
 }
 
 // interrupt service routine for made goals
