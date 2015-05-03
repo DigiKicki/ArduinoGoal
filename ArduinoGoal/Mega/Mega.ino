@@ -1,7 +1,7 @@
 
 //////////////////////////////////////////////////////////////////////////////////
 /// Dateiname: Mega.ino                                                        ///
-/// Stand: 30.12.2014                                                          ///
+/// Stand: 03.05.2015                                                          ///
 /// Aufgaben: Beleuchtung, Spielstands-Anzeige, Torerkennung für 1 Tor         ///
 //////////////////////////////////////////////////////////////////////////////////
 
@@ -39,9 +39,6 @@ const int ANZ_LEDs = 2*(LongSide+ShortSide);
 #define REFERENCE_VALUE 14
 
 // CONSTANTS FOR BUTTONS
-// Vorbereitung für Bedienpanel (6. Semester)
-//#define START_BUTTON_PIN 8
-//#define HOLD_TIME_THRESHOLD 3000
 #define CONTACT_CHATTER_TIME 2000
 
 /////////////////////////////////////////////////////---VARIABLES---//////////////////////////////////////////////////////// 
@@ -79,7 +76,6 @@ const int ANZ_LEDs = 2*(LongSide+ShortSide);
   int DetectionCounter = 0;
   
   //  VARIABLES FOR BUTTONS
-  //long Start_HoldTime = 0;
   volatile boolean ScoreCorrected = false;
   volatile unsigned long FirstContactTimeYellowIncrease = 0;
   volatile unsigned long FirstContactTimeYellowDecrease = 0;
@@ -109,10 +105,15 @@ void setup()
   STRIP.clear();    //komplettes Schieberegister wird geleert
   STRIP.show();     //Alle LEDs sind sicher ausgeschaltet
   
+  // get pwm value for reference voltage
+  long diodeValue = analogRead(0);
+  Serial.println(diodeValue);
+  analogWrite(PWM_PIN_REF_V, map(diodeValue, 0, 1023, 0, 255));
+  
   // SETUP ANALOG INTERRUPT
   analogComparator.setOn(6, DIODE_PIN);
   analogComparator.enableInterrupt(ISR_goalDetected, FALLING);
-  analogWrite(PWM_PIN_REF_V, REFERENCE_VALUE);    //PWM-Signal für die Referenzspannung
+  //analogWrite(PWM_PIN_REF_V, map(diodeValue, 0, 1023, 0, 255));    //PWM-Signal für die Referenzspannung
   
   // LED FOR TIMER
   pinMode(13, OUTPUT);
@@ -147,8 +148,10 @@ void setup()
     STRIP.setPixelColor(i, 255, 255, 255);
   }
   STRIP.show();*/
-  //startMatch = true;     //Spiel wird automatisch gestartet
-  //Serial.println("MatchStart");
+  Serial.println("Setup abgeschlossen");
+  startMatch = true;     //Spiel wird automatisch gestartet
+  Serial.println("MatchStart");
+  
 }
 
 /////////////////////////////////////////////////////---ISR---////////////////////////////////////////////////////////
@@ -214,11 +217,11 @@ void serialEvent2()
       
   switch(incomingByte)
   {
-    case SERIAL_TIME_OVER: activeMatch=false; stopMatch=true; break;
+    case SERIAL_TIME_OVER: if(activeMatch) {activeMatch=false; stopMatch=true;} break;
     case SERIAL_GOAL_UNO: delay(5); Serial.println("Goalbyte angekommen"); GoalTimeMinutes=Serial2.read(); GoalTimeSeconds=Serial2.read(); goal_Yellow=true; break; //------<<Bool-Wert anpassen Teamabhängig
     case SERIAL_GOAL_ANSWER: delay(5); GoalTimeMinutes=Serial2.read(); GoalTimeSeconds=Serial2.read(); break;
     case SERIAL_GAME_START: if(!activeMatch && !startMatch) {startMatch=true; Serial.println("Start-Byte angekommen");} break;
-    case SERIAL_GAME_RESET: restartMatch=true; Serial.println("Reset-Byte angekommen"); break;
+    case SERIAL_GAME_RESET: if(activeMatch) {restartMatch=true; Serial.println("Reset-Byte angekommen");} break;
     default: break;
   }
 }
@@ -236,7 +239,8 @@ void SendSerialByte(byte sendByte)
 void ISR_goalDetected() {
   analogComparator.disableInterrupt();
   goal_Blue = true; //--------------------<<variabel anpassen, teamabhängig
-  //SendSerialByte(SERIAL_GOAL_MEGA);
+  Serial.println("Tor!");
+  SendSerialByte(SERIAL_GOAL_MEGA);
 }
 
 //--------------------------------------Bedienpanel Buttons--------------------------------------------//
@@ -295,27 +299,6 @@ void ISR_scoreBlueDecrease()
     FirstContactTimeBlueDecrease = millis();
   }
 }
-
-
-/*void ISR_Start_Button(void)
-{
-  noInterrupts(); 
-  
-  if(activeMatch)
-  {
-    SendSerialByte(SERIAL_TIME_RESET);
-    restartMatch = true;
-  }
-  else if (!activeMatch)
-  {
-    SendSerialByte(SERIAL_TIME_START);
-    startMatch = true;
-  }
-  
-  delay(CONTACT_CHATTER_TIME);    //um Schalterprellen zu blockieren
-  interrupts();
-  return;
-}*/
 
 /////////////////////////////////////////////////////---7SEG DISPLAY---////////////////////////////////////////////////////////
 
