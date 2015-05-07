@@ -56,7 +56,6 @@ boolean gameStarted;
 long currentTime;
 long goalTime;
 volatile long startTriggerTime;
-volatile long startTriggerTimeEnd;
 
 void setup() {
   Serial.begin(9600);
@@ -93,12 +92,10 @@ void loop(){
       Serial.write(SERIAL_GAME_START);
       startGame = true;
       startTriggerTime = 0;
-    } else if (startTriggerTimeEnd - startTriggerTime > RESET_TIMEOUT) { // reset a running game
+    } else if (currentTime - startTriggerTime > RESET_TIMEOUT && currentTime - startTriggerTime < RESET_TIMEOUT + TIME_FIX_VALUE) {
       Serial.write(SERIAL_GAME_RESET);
       startGame = true;
-      startTriggerTimeEnd = startTriggerTime = 0;
-    } else if (currentTime - startTriggerTime > RESET_TIMEOUT_MAX) {
-      startTriggerTimeEnd = startTriggerTime = 0;
+      startTriggerTime = 0;
     }
   }
   
@@ -238,7 +235,7 @@ byte getMinute(long time) {
 
 // interrupt service routine for start trigger
 void ISR_startTrigger_released() {
-  startTriggerTimeEnd = millis();
+  startTriggerTime = 0;
 }
 
 // interrupt service routine for start trigger
