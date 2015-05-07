@@ -83,6 +83,11 @@ void setup() {
 }
 
 void loop(){  
+  // get current time only during a game
+  if (gameStarted || wave.isplaying) {
+    currentTime = millis();
+  }
+
   if (startTriggerTime > 0) {
     if (!gameStarted) {
       Serial.write(SERIAL_GAME_START);
@@ -98,17 +103,12 @@ void loop(){
     }
   }
   
-  // get current time only during a game
-  if (startGame || gameStarted || wave.isplaying) {
-    currentTime = millis();
-  }
-
   // start a new game
   if (startGame) {
     setupDisplay();
     gameStarted = true;
     startGame = false;
-    startTime = playTime = goalTime = currentTime;
+    startTime = playTime = goalTime = currentTime = millis();
     playSound("start.wav");
   }
   
