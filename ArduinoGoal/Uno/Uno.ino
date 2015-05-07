@@ -95,7 +95,6 @@ void loop(){
       startTriggerTime = 0;
     } else if (startTriggerTimeEnd - startTriggerTime > RESET_TIMEOUT) { // reset a running game
       Serial.write(SERIAL_GAME_RESET);
-      gameStarted = false;
       startGame = true;
       startTriggerTimeEnd = startTriggerTime = 0;
     } else if (currentTime - startTriggerTime > RESET_TIMEOUT_MAX) {
