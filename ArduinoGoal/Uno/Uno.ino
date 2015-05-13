@@ -23,7 +23,7 @@ boolean reEnableInterrupr;
 
 // WAVE SHIELD CONSTANTS
 #define playSound(name) playSound_P(PSTR(name))
-#define SOUND_PLAY_TIME 15000
+#define SOUND_PLAY_TIME 36000
 // wave shield variables
 SdReader card;
 FatVolume vol;
@@ -49,13 +49,14 @@ boolean goal2;
 // GAME CONSTANTS
 #define START_PIN 8
 #define RESET_TIMEOUT 3000
-#define RESET_TIMEOUT_MAX 5000
+#define RESET_TIMEOUT_MAX 8000
 // game variables
 boolean startGame;
 boolean gameStarted;
 long currentTime;
 long goalTime;
 volatile long startTriggerTime;
+volatile long startTriggerTimeEnd;
 
 void setup() {
   Serial.begin(9600);
@@ -92,10 +93,12 @@ void loop(){
       Serial.write(SERIAL_GAME_START);
       startGame = true;
       startTriggerTime = 0;
-    } else if (currentTime - startTriggerTime > RESET_TIMEOUT && currentTime - startTriggerTime < RESET_TIMEOUT + TIME_FIX_VALUE) {
+    } else if (startTriggerTimeEnd - startTriggerTime > RESET_TIMEOUT) { // reset a running game
       Serial.write(SERIAL_GAME_RESET);
       startGame = true;
-      startTriggerTime = 0;
+      startTriggerTimeEnd = startTriggerTime = 0;
+    } else if (currentTime - startTriggerTime > RESET_TIMEOUT_MAX) {
+      startTriggerTimeEnd = startTriggerTime = 0;
     }
   }
   
@@ -235,7 +238,7 @@ byte getMinute(long time) {
 
 // interrupt service routine for start trigger
 void ISR_startTrigger_released() {
-  startTriggerTime = 0;
+  startTriggerTimeEnd = millis();
 }
 
 // interrupt service routine for start trigger
