@@ -39,7 +39,7 @@ const int ANZ_LEDs = 2*(LongSide+ShortSide);
 #define REFERENCE_VALUE 14
 
 // CONSTANTS FOR BUTTONS
-#define CONTACT_CHATTER_TIME 2000
+#define CONTACT_CHATTER_TIME 500
 
 /////////////////////////////////////////////////////---VARIABLES---//////////////////////////////////////////////////////// 
   
@@ -67,13 +67,14 @@ const int ANZ_LEDs = 2*(LongSide+ShortSide);
   
   //  VARIABLES FOR 7SEG DISPLAY
   Adafruit_7segment scoreDisplay = Adafruit_7segment();
-  int ScoreTeamYellow = 0;
-  int ScoreTeamBlue = 0;
+  int ScoreTeamYellow = 13;
+  int ScoreTeamBlue = 5;
   
   //  VARIABLES FOR ANALOG INTERRUPT
   volatile boolean goal_Yellow;
   volatile boolean goal_Blue;
-  int DetectionCounter = 0;
+  volatile boolean AnalogCompareDisabled = false;
+  int DiodeChatterCounter = 0;
   
   //  VARIABLES FOR BUTTONS
   volatile boolean ScoreCorrected = false;
@@ -89,30 +90,33 @@ void setup()
 {
   //  SETUP SERIAL COMMUNICATION
   Serial.begin(9600);    // startet serielle Konsole
-  Serial2.begin(9600);   // startet serielle Kommunikation S1:  Pin19 (RX, Empfänger), Pin18 (TX, Sender)
-  Serial2.write(12);
-  Serial2.print(13);
   
-  //  SETUP 7SEG DISPLAY
+  Serial2.begin(9600);   // startet serielle Kommunikation S1:  Pin19 (RX, Empfänger), Pin18 (TX, Sender)
+  
+  //Serial2.write(12);
+  //Serial2.print(13);
+  
+   //  SETUP 7SEG DISPLAY
   scoreDisplay.begin(0x70);
   scoreDisplay.setBrightness(0);
   scoreDisplay.print(10000);        //Schreibt auf Display: - -:- -
   scoreDisplay.drawColon(true);     //Doppelpunkt wird eingeschaltet
   scoreDisplay.writeDisplay();
+   
   
   //  SETUP LED STRIP
   STRIP.begin();
   STRIP.clear();    //komplettes Schieberegister wird geleert
   STRIP.show();     //Alle LEDs sind sicher ausgeschaltet
-  
+  Serial.println("Test");
   // get pwm value for reference voltage
-  long diodeValue = analogRead(0);
-  Serial.println(diodeValue);
-  analogWrite(PWM_PIN_REF_V, map(diodeValue, 0, 1023, 0, 255));
+  //long diodeValue = analogRead(0);
+  //Serial.println(diodeValue);
+  //analogWrite(PWM_PIN_REF_V, map(diodeValue, 0, 1023, 0, 255));
   
   // SETUP ANALOG INTERRUPT
-  analogComparator.setOn(6, DIODE_PIN);
-  analogComparator.enableInterrupt(ISR_goalDetected, FALLING);
+  analogComparator.setOn(INTERNAL_REFERENCE, DIODE_PIN);
+  
   //analogWrite(PWM_PIN_REF_V, map(diodeValue, 0, 1023, 0, 255));    //PWM-Signal für die Referenzspannung
   
   // LED FOR TIMER
@@ -123,10 +127,10 @@ void setup()
   attachInterrupt(0, ISR_scoreYellowIncrease, FALLING);    // Gelb+1 PIN: 2
   pinMode(3, INPUT_PULLUP);
   attachInterrupt(1, ISR_scoreYellowDecrease, FALLING);    // Gelb-1 PIN: 3
-  pinMode(19, INPUT_PULLUP);
+  /*pinMode(19, INPUT_PULLUP);
   attachInterrupt(4, ISR_scoreBlueIncrease, FALLING);    // Blau+1 PIN: 19
   pinMode(18, INPUT_PULLUP);
-  attachInterrupt(5, ISR_scoreBlueDecrease, FALLING);    // Blau-1 PIN: 18
+  attachInterrupt(5, ISR_scoreBlueDecrease, FALLING);*/    // Blau-1 PIN: 18
   
   
   // SETUP TIMERS
@@ -142,15 +146,16 @@ void setup()
   TIMSK1 |= _BV(OCIE1A); // enable timer compare interrupt
   interrupts();
   
-  //StartShow();
-  /*for(int i=0; i<ANZ_LEDs; i++)
+  StartShow();
+ /* for(int i=0; i<ANZ_LEDs; i++)
   {
-    STRIP.setPixelColor(i, 255, 255, 255);
+    STRIP.setPixelColor(i, 0, 0, 255);
   }
   STRIP.show();*/
+  analogComparator.enableInterrupt(ISR_goalDetected, FALLING);
   Serial.println("Setup abgeschlossen");
-  startMatch = true;     //Spiel wird automatisch gestartet
-  Serial.println("MatchStart");
+  //startMatch = true;     //Spiel wird automatisch gestartet
+  //Serial.println("MatchStart");
   
 }
 
@@ -160,19 +165,21 @@ ISR(TIMER1_COMPA_vect)
 {
   digitalWrite(13, !digitalRead(13));
   //Tor-Erkennung freischalten
-  if(goal_Blue == true)
+  if(AnalogCompareDisabled == true)
   {
-    DetectionCounter++;
-    if(DetectionCounter == 3)
+    DiodeChatterCounter++;
+    if(DiodeChatterCounter == 3)
     {
       analogComparator.enableInterrupt(ISR_goalDetected, FALLING);
-      goal_Blue = false;
+      Serial.println("Compare freigeschalten)");
+      AnalogCompareDisabled = false;
+      DiodeChatterCounter = 0;
     }
   }
   
   //Zeit seit letztem Ereignis zählen, ggf. ShowScore freischalten
   if(activeMatch == true)  {LastEvent++; }
-  if(LastEvent==120 && activeMatch==true && ScoreTeamYellow > 0 && ScoreTeamBlue > 0)      //alle 2 Minuten erscheint Spielstands-Effekt WENN mindestens 1 Tor erzielt wurde
+  if(LastEvent==30 && activeMatch==true && (ScoreTeamYellow > 0 || ScoreTeamBlue > 0))      //alle 2 Minuten erscheint Spielstands-Effekt WENN mindestens 1 Tor erzielt wurde
   {
     SHOWSCORE = true;
   }
@@ -182,10 +189,6 @@ ISR(TIMER1_COMPA_vect)
 
 void loop()
 {
-  //Tor-Abfrage über Boolean-Variabeln
-  if(goal_Yellow)  { goal_Yellow=false; GOAL(true); }
-  if(goal_Blue)    { GOAL(false); }
-  
   //Abfrage ob Spielstand korregiert wurde
   if(ScoreCorrected)
   {
@@ -193,6 +196,12 @@ void loop()
     WriteScoreOnDisplay(false);    //Spielstand Team Blau aktualisieren
     ScoreCorrected = false;
   }
+  
+  //Tor-Abfrage über Boolean-Variabeln
+  if(goal_Yellow)  { goal_Yellow=false; ScoreTeamYellow++; WriteScoreOnDisplay(true); WriteScoreOnDisplay(false); GOAL(true); }
+  if(goal_Blue)    { goal_Blue=false;  ScoreTeamBlue++; WriteScoreOnDisplay(true); WriteScoreOnDisplay(false); GOAL(false); }
+  
+  
   
   //Abfrage der Start-Merker
   if(startMatch)  { startMatch = false; Serial.println("MatchStart-Methode wird mit Start aufgerufen"); MatchStart(false); }
@@ -221,7 +230,7 @@ void serialEvent2()
     case SERIAL_GOAL_UNO: delay(5); Serial.println("Goalbyte angekommen"); GoalTimeMinutes=Serial2.read(); GoalTimeSeconds=Serial2.read(); goal_Yellow=true; break; //------<<Bool-Wert anpassen Teamabhängig
     case SERIAL_GOAL_ANSWER: delay(5); GoalTimeMinutes=Serial2.read(); GoalTimeSeconds=Serial2.read(); break;
     case SERIAL_GAME_START: if(!activeMatch && !startMatch) {startMatch=true; Serial.println("Start-Byte angekommen");} break;
-    case SERIAL_GAME_RESET: if(activeMatch) {restartMatch=true; Serial.println("Reset-Byte angekommen");} break;
+    case SERIAL_GAME_RESET: {restartMatch=true; Serial.println("Reset-Byte angekommen");} break;
     default: break;
   }
 }
@@ -230,7 +239,7 @@ void serialEvent2()
 void SendSerialByte(byte sendByte)
 {
   Serial2.write(sendByte);
-  Serial.println("Tor-Byte gesendet");
+  Serial.println("Byte gesendet");
   return;
 }
 
@@ -238,9 +247,14 @@ void SendSerialByte(byte sendByte)
 
 void ISR_goalDetected() {
   analogComparator.disableInterrupt();
-  goal_Blue = true; //--------------------<<variabel anpassen, teamabhängig
-  Serial.println("Tor!");
-  SendSerialByte(SERIAL_GOAL_MEGA);
+  AnalogCompareDisabled=true;
+  Serial.println("Tor-Routine");
+  if(activeMatch)
+  {
+    goal_Blue = true; //--------------------<<variabel anpassen, teamabhängig
+    Serial.println("Tor!");
+    SendSerialByte(SERIAL_GOAL_MEGA);
+  }
 }
 
 //--------------------------------------Bedienpanel Buttons--------------------------------------------//
@@ -250,13 +264,11 @@ void ISR_scoreYellowIncrease()
   //Schalterprellen blockieren
   if( activeMatch && (millis()-FirstContactTimeYellowIncrease) > CONTACT_CHATTER_TIME)
   {
-    /*
+    
     ScoreCorrected = true;
     ScoreTeamYellow++;
-    Serial.println("Gelb+");*/
-    goal_Blue = true; //--------------------<<variabel anpassen, teamabhängig
-    Serial.println("Tor Blau");
-    SendSerialByte(SERIAL_GOAL_MEGA);
+    Serial.println("Gelb+");;
+    
     
     FirstContactTimeYellowIncrease = millis();
   }
@@ -336,23 +348,29 @@ void WriteScoreOnDisplay(boolean Team)
 
 void GOAL(boolean Team)
 {
-  DecreaseBrightness(30);      //Helligkeit wird reduziert umd Tor-Show starten zu können
+  
+  //DecreaseBrightness(30);      //Helligkeit wird reduziert umd Tor-Show starten zu können
   
   WriteScoreOnDisplay(Team);   //Digiale Anzeige wird aktualisiert
-    
+  
+  if(Team)  { setArrayColor(255, 180, 0); Serial.println("Farbe auf Gelb");}
+  else {setArrayColor(0, 0, 255); Serial.println("Farbe auf Blau");}
+  Blinking(3,  250, 250);
+  delay(1000);
   //Torshow-Effekt  
-  switch(random(random_Limit))    //Aufruf der Tor-Show
+  /*switch(random(random_Limit))    //Aufruf der Tor-Show
   {
     case 0: LongSides2Waves(Team); break;
     case 1: BlinkingAndTwoWaves(Team); break;
     case 2: EveryOther(Team); break;
     case 3: ShotandBlinking(Team); break;
     default: break;
-  }
+  }*/
   //Strip-Array vollständig auf Weis setzen
   setArrayColor(255, 255, 255);
+  TransmiteToLEDs();
   
-  IncreaseBrightness(30);      //Helligkeit wird wieder angehoben um das Spiel fortzuführen
+  //IncreaseBrightness(30);      //Helligkeit wird wieder angehoben um das Spiel fortzuführen
   LastEvent = 0;
 }
 
@@ -464,8 +482,8 @@ void StartShow()
     }
   }
   
-  IncreaseBrightness(60);
-  Rotation360();
+  
+  ///Rotation360();
   Blinking(3,  250, 250);
   return;
 }
@@ -476,21 +494,15 @@ void MatchStart(boolean RESTART)
 {
   activeMatch = true;
   Serial.println("MatchStart");
-  if(RESTART)
-  {
-    DecreaseBrightness(60);
-    scoreDisplay.setBrightness(0);
-  }
 
-  ScoreTeamYellow = 0;
-  ScoreTeamBlue = 0;
+  ScoreTeamYellow = 7;
+  ScoreTeamBlue = 5;
   
-  DecreaseBrightness(30);
   setArrayColor(255, 255, 255);    //Array auf Weis setzen
+  TransmiteToLEDs();
   scoreDisplay.setBrightness(15);  //Schaltet Display ein
   WriteScoreOnDisplay(true);
   WriteScoreOnDisplay(false);
-  IncreaseBrightness(30);
 }
 
 void MatchEnd()
@@ -578,7 +590,7 @@ void ShowScore(void)
 {
   //Auswahl welcher ShowScore-Funktion verwendet werden kann
   if(ScoreTeamBlue <=10 && ScoreTeamYellow <= 10)  { ShowScoreLongSides(); }
-  else if((ScoreTeamBlue >10 && ScoreTeamYellow >10) && (ScoreTeamBlue <19 && ScoreTeamYellow <19))  { ShowScoreShortSides(); }
+  //else if((ScoreTeamBlue >10 || ScoreTeamYellow >10) && (ScoreTeamBlue <19 && ScoreTeamYellow <19))  { ShowScoreShortSides(); }
   
   LastEvent = 0;    //Dauer seit dem letzten Event wird zurückgesetzt
 }
@@ -699,10 +711,10 @@ void ShowScoreLongSides(void)
   {
     for(int j=0; j<3; j++)
     {
-      stripArray[MidpointLongSideRight-1-1-i][j] = 0;
-      stripArray[MidpointLongSideLeft+1-1+i][j] = 0;
-      stripArray[MidpointLongSideRight+1-1+i][j] = 0;
-      stripArray[MidpointLongSideLeft-1-1-i][j] = 0;
+      stripArray[MidpointLongSideRight-1-i][j] = 0;
+      stripArray[MidpointLongSideLeft-1+i][j] = 0;
+      stripArray[MidpointLongSideRight-1+i][j] = 0;
+      stripArray[MidpointLongSideLeft-1-i][j] = 0;
     }
   }
   TransmiteToLEDs();
@@ -712,10 +724,10 @@ void ShowScoreLongSides(void)
   {
     for(int j=0; j<3; j++)
     {
-      stripArray[MidpointLongSideRight-1-1-i][j] = 255;
-      stripArray[MidpointLongSideLeft+1-1+i][j] = 255;
-      stripArray[MidpointLongSideRight+1-1+i][j] = 255;
-      stripArray[MidpointLongSideLeft-1-1-i][j] = 255;
+      stripArray[MidpointLongSideRight-1-i][j] = 255;
+      stripArray[MidpointLongSideLeft-1+i][j] = 255;
+      stripArray[MidpointLongSideRight-1+i][j] = 255;
+      stripArray[MidpointLongSideLeft-1-i][j] = 255;
     }
     TransmiteToLEDs();
     delay(internalDelayShowScoreDelay);
