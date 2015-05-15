@@ -1,8 +1,8 @@
 
 //////////////////////////////////////////////////////////////////////////////////
 /// Dateiname: Mega.ino                                                        ///
-/// Stand: 03.05.2015                                                          ///
-/// Aufgaben: Beleuchtung, Spielstands-Anzeige, Torerkennung für 1 Tor         ///
+/// Stand: 15.05.2015                                                          ///
+/// Aufgaben: Beleuchtung, Spielstands-Anzeige, Torerkennung für Tor GELB      ///
 //////////////////////////////////////////////////////////////////////////////////
 
 /////////////////////////////////////////////////////---LIBRARIES---////////////////////////////////////////////////////////
@@ -34,12 +34,9 @@ const int ANZ_LEDs = 2*(LongSide+ShortSide);
 
 // CONSTANTS FOR ANALOG INTERRUPT
 #define DIODE_PIN 0
-#define GOAL_TIME_THRESHOLD 3000
-#define PWM_PIN_REF_V 5
-#define REFERENCE_VALUE 14
 
 // CONSTANTS FOR BUTTONS
-#define CONTACT_CHATTER_TIME 500
+#define CONTACT_CHATTER_TIME 300
 
 /////////////////////////////////////////////////////---VARIABLES---//////////////////////////////////////////////////////// 
   
@@ -67,8 +64,8 @@ const int ANZ_LEDs = 2*(LongSide+ShortSide);
   
   //  VARIABLES FOR 7SEG DISPLAY
   Adafruit_7segment scoreDisplay = Adafruit_7segment();
-  int ScoreTeamYellow = 13;
-  int ScoreTeamBlue = 5;
+  int ScoreTeamYellow = 0;
+  int ScoreTeamBlue = 0;
   
   //  VARIABLES FOR ANALOG INTERRUPT
   volatile boolean goal_Yellow;
@@ -90,11 +87,7 @@ void setup()
 {
   //  SETUP SERIAL COMMUNICATION
   Serial.begin(9600);    // startet serielle Konsole
-  
   Serial2.begin(9600);   // startet serielle Kommunikation S1:  Pin19 (RX, Empfänger), Pin18 (TX, Sender)
-  
-  //Serial2.write(12);
-  //Serial2.print(13);
   
    //  SETUP 7SEG DISPLAY
   scoreDisplay.begin(0x70);
@@ -102,22 +95,14 @@ void setup()
   scoreDisplay.print(10000);        //Schreibt auf Display: - -:- -
   scoreDisplay.drawColon(true);     //Doppelpunkt wird eingeschaltet
   scoreDisplay.writeDisplay();
-   
   
   //  SETUP LED STRIP
   STRIP.begin();
   STRIP.clear();    //komplettes Schieberegister wird geleert
   STRIP.show();     //Alle LEDs sind sicher ausgeschaltet
-  Serial.println("Test");
-  // get pwm value for reference voltage
-  //long diodeValue = analogRead(0);
-  //Serial.println(diodeValue);
-  //analogWrite(PWM_PIN_REF_V, map(diodeValue, 0, 1023, 0, 255));
   
   // SETUP ANALOG INTERRUPT
   analogComparator.setOn(INTERNAL_REFERENCE, DIODE_PIN);
-  
-  //analogWrite(PWM_PIN_REF_V, map(diodeValue, 0, 1023, 0, 255));    //PWM-Signal für die Referenzspannung
   
   // LED FOR TIMER
   pinMode(13, OUTPUT);
@@ -131,7 +116,7 @@ void setup()
   attachInterrupt(4, ISR_scoreBlueIncrease, FALLING);    // Blau+1 PIN: 19
   pinMode(18, INPUT_PULLUP);
   attachInterrupt(5, ISR_scoreBlueDecrease, FALLING);*/    // Blau-1 PIN: 18
-  
+  //auskommentiert aufgrund mechanischen Defekts des Schalters
   
   // SETUP TIMERS
   noInterrupts();           // disable all interrupts
@@ -147,16 +132,9 @@ void setup()
   interrupts();
   
   StartShow();
- /* for(int i=0; i<ANZ_LEDs; i++)
-  {
-    STRIP.setPixelColor(i, 0, 0, 255);
-  }
-  STRIP.show();*/
   analogComparator.enableInterrupt(ISR_goalDetected, FALLING);
-  Serial.println("Setup abgeschlossen");
-  //startMatch = true;     //Spiel wird automatisch gestartet
-  //Serial.println("MatchStart");
   
+  Serial.println("Setup abgeschlossen");  
 }
 
 /////////////////////////////////////////////////////---ISR---////////////////////////////////////////////////////////
@@ -179,7 +157,7 @@ ISR(TIMER1_COMPA_vect)
   
   //Zeit seit letztem Ereignis zählen, ggf. ShowScore freischalten
   if(activeMatch == true)  {LastEvent++; }
-  if(LastEvent==30 && activeMatch==true && (ScoreTeamYellow > 0 || ScoreTeamBlue > 0))      //alle 2 Minuten erscheint Spielstands-Effekt WENN mindestens 1 Tor erzielt wurde
+  if(LastEvent==120 && activeMatch==true && (ScoreTeamYellow > 0 || ScoreTeamBlue > 0))      //alle 2 Minuten erscheint Spielstands-Effekt WENN mindestens 1 Tor erzielt wurde
   {
     SHOWSCORE = true;
   }
@@ -200,9 +178,7 @@ void loop()
   //Tor-Abfrage über Boolean-Variabeln
   if(goal_Yellow)  { goal_Yellow=false; ScoreTeamYellow++; WriteScoreOnDisplay(true); WriteScoreOnDisplay(false); GOAL(true); }
   if(goal_Blue)    { goal_Blue=false;  ScoreTeamBlue++; WriteScoreOnDisplay(true); WriteScoreOnDisplay(false); GOAL(false); }
-  
-  
-  
+
   //Abfrage der Start-Merker
   if(startMatch)  { startMatch = false; Serial.println("MatchStart-Methode wird mit Start aufgerufen"); MatchStart(false); }
   if(restartMatch)  { restartMatch = false; Serial.println("MatchStart-Methode wird mit Restart aufgerufen"); MatchStart(true); }
@@ -211,11 +187,7 @@ void loop()
   if(stopMatch)  { stopMatch = false; MatchEnd(); }
   
   //Abfrage ob 2 Minuten seit dem letzten Event vergangen sind und der Spielstand mit LEDs visualisiert werden soll
-  if(SHOWSCORE)
-  {
-    SHOWSCORE = false;
-    ShowScore();
-  }
+  if(SHOWSCORE)  { SHOWSCORE = false; ShowScore(); }
 }
 
 /////////////////////////////////////////////////////Serial-Kommunikation////////////////////////////////////////////////////////
@@ -264,11 +236,9 @@ void ISR_scoreYellowIncrease()
   //Schalterprellen blockieren
   if( activeMatch && (millis()-FirstContactTimeYellowIncrease) > CONTACT_CHATTER_TIME)
   {
-    
     ScoreCorrected = true;
     ScoreTeamYellow++;
     Serial.println("Gelb+");;
-    
     
     FirstContactTimeYellowIncrease = millis();
   }
@@ -349,15 +319,16 @@ void WriteScoreOnDisplay(boolean Team)
 void GOAL(boolean Team)
 {
   
-  //DecreaseBrightness(30);      //Helligkeit wird reduziert umd Tor-Show starten zu können
+  //DecreaseBrightness(30);      //Helligkeit wird reduziert umd Tor-Show starten zu können; Auskommentiert, da starkes Flimmern in der Beleuchtung
   
   WriteScoreOnDisplay(Team);   //Digiale Anzeige wird aktualisiert
   
+  //Torshow-Effekt 
   if(Team)  { setArrayColor(255, 180, 0); Serial.println("Farbe auf Gelb");}
   else {setArrayColor(0, 0, 255); Serial.println("Farbe auf Blau");}
   Blinking(3,  250, 250);
   delay(1000);
-  //Torshow-Effekt  
+   
   /*switch(random(random_Limit))    //Aufruf der Tor-Show
   {
     case 0: LongSides2Waves(Team); break;
@@ -366,11 +337,13 @@ void GOAL(boolean Team)
     case 3: ShotandBlinking(Team); break;
     default: break;
   }*/
+  //Auskommentiert, da starkes Flimmern in der Beleuchtung bis Totalausfall
+  
   //Strip-Array vollständig auf Weis setzen
   setArrayColor(255, 255, 255);
   TransmiteToLEDs();
   
-  //IncreaseBrightness(30);      //Helligkeit wird wieder angehoben um das Spiel fortzuführen
+  //IncreaseBrightness(30);      //Helligkeit wird wieder angehoben um das Spiel fortzuführen; Auskommentiert, da starkes Flimmern in der Beleuchtung
   LastEvent = 0;
 }
 
@@ -482,8 +455,7 @@ void StartShow()
     }
   }
   
-  
-  ///Rotation360();
+  ///Rotation360(); //Auskommentiert, da starkes Flimmern in der Beleuchtung
   Blinking(3,  250, 250);
   return;
 }
@@ -495,11 +467,12 @@ void MatchStart(boolean RESTART)
   activeMatch = true;
   Serial.println("MatchStart");
 
-  ScoreTeamYellow = 7;
-  ScoreTeamBlue = 5;
-  
+  ScoreTeamYellow = 0;
+  ScoreTeamBlue = 0;
+  //Beleuchtung
   setArrayColor(255, 255, 255);    //Array auf Weis setzen
   TransmiteToLEDs();
+  //Spielstandsanzeige
   scoreDisplay.setBrightness(15);  //Schaltet Display ein
   WriteScoreOnDisplay(true);
   WriteScoreOnDisplay(false);
@@ -514,26 +487,34 @@ void MatchEnd()
 
 void EndShow()
 {
-  //Abschluss-Show
-  scoreDisplay.blinkRate(1);      //Display blinkt mit Endstand
-  DecreaseBrightness(30);
   Serial.println("Spielende");
+  
+  //Display: Abschluss-Show START
+  scoreDisplay.blinkRate(1);      //Display blinkt mit Endstand
+  //DecreaseBrightness(30);        //Auskommentiert, da starkes Flimmern in der Beleuchtung
+  
   //LEDs in Sieger-Farbe einfärben, bei Unentschieden: Halb-Halb
   if(ScoreTeamYellow > ScoreTeamBlue)  { setArrayColor(ColorTeamYellow[0][0], ColorTeamYellow[0][1], ColorTeamYellow[0][2]); }
   else if(ScoreTeamYellow < ScoreTeamBlue)  { setArrayColor(ColorTeamBlue[0][0], ColorTeamBlue[0][1], ColorTeamBlue[0][2]); }
   else if(ScoreTeamYellow == ScoreTeamBlue)  { setArrayColorHalfHalf(); }
   
-  IncreaseBrightness(30);
-  Blinking(3,  250, 250);
+  //IncreaseBrightness(30);      //Auskommentiert, da starkes Flimmern in der Beleuchtung
+  
+  //Beleuchtung: Abschluss-Show
+  Blinking(3,  500, 500);
+  //Display: Abschluss-Show ENDE
   scoreDisplay.blinkRate(0);      //Ausschalten des Blinken des Displays
   delay(3000);
   
+  //Display: Endzustand
   scoreDisplay.print(10000);      //Schreibt auf Display: - -:- -
   scoreDisplay.setBrightness(0);  //Ausschalten des Displays
-  DecreaseBrightness(60);
   
+  //Beleuchtung: Endzustand
+  //DecreaseBrightness(60);    //Auskommentiert, da starkes Flimmern in der Beleuchtung
   setArrayColorHalfHalf();
-  IncreaseBrightness(60);
+  TransmiteToLEDs();
+  //IncreaseBrightness(60);    //Auskommentiert, da starkes Flimmern in der Beleuchtung
   //Grundzustand bei nicht aktivem Spiel ist erreicht
   
   return;
@@ -591,6 +572,7 @@ void ShowScore(void)
   //Auswahl welcher ShowScore-Funktion verwendet werden kann
   if(ScoreTeamBlue <=10 && ScoreTeamYellow <= 10)  { ShowScoreLongSides(); }
   //else if((ScoreTeamBlue >10 || ScoreTeamYellow >10) && (ScoreTeamBlue <19 && ScoreTeamYellow <19))  { ShowScoreShortSides(); }
+  //Auskommentiert, da nicht funktionsfähig
   
   LastEvent = 0;    //Dauer seit dem letzten Event wird zurückgesetzt
 }
